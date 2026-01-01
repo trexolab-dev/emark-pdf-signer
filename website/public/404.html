@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>eMark PDF Signer - Redirecting...</title>
+    <script>
+      // GitHub Pages SPA redirect script
+      // This script handles client-side routing for single-page applications on GitHub Pages
+      // When a 404 occurs, it redirects to index.html with the original path as a query parameter
+
+      (function() {
+        // Get the current path and search params
+        var pathSegmentsToKeep = 1; // Keep /emark-pdf-signer/ as the base
+
+        var l = window.location;
+
+        // Build the redirect URL
+        // We encode the path after the base (/emark-pdf-signer/) into a query parameter
+        var repo = '/emark-pdf-signer';
+        var fullPath = l.pathname;
+
+        // Remove the repo prefix if present
+        var pathAfterRepo = fullPath.startsWith(repo)
+          ? fullPath.slice(repo.length)
+          : fullPath;
+
+        // Redirect to the base URL with path info encoded
+        l.replace(
+          l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
+          repo + '/' +
+          '?p=' + encodeURIComponent(pathAfterRepo.replace(/^\//, '')) +
+          (l.search ? '&q=' + encodeURIComponent(l.search.slice(1)) : '') +
+          l.hash
+        );
+      })();
+    </script>
+  </head>
+  <body>
+    <p>Redirecting to eMark PDF Signer...</p>
+  </body>
+</html>

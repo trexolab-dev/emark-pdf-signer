@@ -1,0 +1,789 @@
+package com.trexolab.gui.pdfHandler;
+
+import com.trexolab.App;
+import com.trexolab.controller.SignerController;
+import com.trexolab.gui.DialogUtils;
+import com.trexolab.gui.KeyboardShortcutManager;
+import com.trexolab.gui.onboarding.OnboardingOverlay;
+import com.trexolab.gui.settings.SettingsDialog;
+import com.trexolab.service.RecentFilesManager;
+import com.trexolab.service.SignatureVerificationService;
+import com.trexolab.utils.CursorStateManager;
+import com.trexolab.utils.Utils;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+
+import javax.swing.*;
+import java.awt.*;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.datatransfer.Transferable;
+import java.awt.dnd.*;
+import java.io.File;
+import java.util.List;
+import java.util.prefs.Preferences;
+
+import static com.trexolab.utils.AppConstants.APP_NAME;
+
+/**
+ * Responsibilities:
+ * - Window frame & layout
+ * - Orchestrates top bar, scroll pane, renderer, and sign controller
+ * - File open & preferences (last directory)
+ * - Title updates & placeholder toggle
+ */
+public class PdfViewerMain extends JFrame {
+    private static final Log log = LogFactory.getLog(PdfViewerMain.class);
+
+    // Layout / sizing
+    private static final int INITIAL_WIDTH = 950;
+    private static final int MIN_WIDTH = 800;
+    private static final int MIN_HEIGHT = 400;
+
+    // Preferences
+    private static final Preferences prefs = Preferences.userNodeForPackage(PdfViewerMain.class);
+    private static final String LAST_DIR_KEY = "lastPdfDir";
+
+    // Singleton (if you still want it)
+    public static PdfViewerMain INSTANCE = null;
+
+    // Collaborators
+    private final TopBarPanel topBar;
+    private final PdfScrollPane pdfScrollPane;
+    private final PlaceholderPanel placeholderPanel;
+    private final PdfRendererService pdfRendererService;
+    private final SignModeController signModeController;
+    private final SignerController signerController = new SignerController();
+    private final CollapsableSignaturePanel signaturePanel;
+    private final SignatureVerificationService verificationService;
+    private final SignatureColorManager colorManager;
+    private final SignatureVerificationBanner verificationBanner;
+    private JLayeredPane layeredPane;
+
+    // New features
+    private final KeyboardShortcutManager shortcutManager;
+    private final RecentFilesManager recentFilesManager;
+
+    // State
+    private File selectedPdfFile = null;
+    private String pdfPassword = null;
+
+    public PdfViewerMain() {
+        super(APP_NAME);
+        INSTANCE = this;
+
+        setIconImage(App.getAppIcon());
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setResizable(true);
+
+        Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+        int frameWidth = Math.min(INITIAL_WIDTH, screen.width);
+        int frameHeight = screen.height - 50;
+        setSize(frameWidth, frameHeight);
+        setPreferredSize(new Dimension(frameWidth, frameHeight));
+        setMinimumSize(new Dimension(MIN_WIDTH, MIN_HEIGHT));
+        setLocationRelativeTo(null);
+
+        // Initialize cursor state manager
+        CursorStateManager.getInstance().setTargetComponent(this);
+
+        // Initialize new feature managers
+        recentFilesManager = RecentFilesManager.getInstance();
+
+        // Services
+        pdfRendererService = new PdfRendererService(this);
+        verificationService = new SignatureVerificationService();
+        colorManager = new SignatureColorManager();
+        signModeController = new SignModeController(
+                PdfViewerMain.INSTANCE,
+                pdfRendererService,
+                signerController,
+                this::onSignStart,
+                this::onSignDone
+        );
+
+        // UI
+        topBar = new TopBarPanel(
+                this::openPdf,
+                () -> new SettingsDialog(this).setVisible(true),
+                signModeController::toggleSignMode
+        );
+        pdfScrollPane = new PdfScrollPane(
+                pdfRendererService,
+                topBar::setPageInfoText // callback to update page label
+        );
+        placeholderPanel = new PlaceholderPanel(this::openPdf);
+
+        // Initialize verification banner first
+        verificationBanner = new SignatureVerificationBanner();
+
+        // Initialize signature panel
+        signaturePanel = new CollapsableSignaturePanel();
+        signaturePanel.setColorManager(colorManager); // Set color manager for color coding
+        signaturePanel.setOnCloseCallback(() -> {
+            // Update banner button state when panel is closed
+            verificationBanner.setButtonSelected(false);
+            layoutOverlayComponents();
+        }); // Update layout when panel closes
+        // Requirement 4: Highlight signature rectangle when selected from panel
+        signaturePanel.setSignatureSelectionListener(pdfRendererService::highlightSignatureOnOverlay);
+        signaturePanel.setOnVerifyAllCallback(this::verifyAllSignatures);
+
+        // Connect signature button in banner to toggle signature panel
+        verificationBanner.setSignatureButtonAction(() -> {
+            if (signaturePanel.isClosed()) {
+                signaturePanel.openPanel();
+                verificationBanner.setButtonSelected(true);
+            } else {
+                signaturePanel.closePanel();
+                verificationBanner.setButtonSelected(false);
+            }
+            layoutOverlayComponents();
+        });
+
+        // Create layered pane for overlay effect
+        layeredPane = new JLayeredPane();
+        layeredPane.setLayout(null); // Absolute positioning for overlay
+
+        // Create container panel for banner and layered pane
+        JPanel centerContainer = new JPanel(new BorderLayout());
+        centerContainer.add(verificationBanner, BorderLayout.NORTH);
+        centerContainer.add(layeredPane, BorderLayout.CENTER);
+
+        setLayout(new BorderLayout());
+        add(topBar, BorderLayout.NORTH);
+        add(centerContainer, BorderLayout.CENTER);
+
+        // Add component listener to handle resizing
+        layeredPane.addComponentListener(new java.awt.event.ComponentAdapter() {
+            @Override
+            public void componentResized(java.awt.event.ComponentEvent e) {
+                layoutOverlayComponents();
+            }
+        });
+
+        showPlaceholder(true);
+        enableDragAndDrop(placeholderPanel);
+        enableDragAndDrop(pdfScrollPane);
+
+        // Setup keyboard shortcuts
+        shortcutManager = new KeyboardShortcutManager(getRootPane());
+        setupKeyboardShortcuts();
+
+        // Connect topBar to new features
+        topBar.setOnOpenFile(this::loadAndRenderPdf);
+        topBar.setOnGoToPage(this::navigateToPage);
+
+        // Connect scroll pane page change to topBar for live page number updates
+        pdfScrollPane.setPageChangeListener((currentPage, totalPages) -> {
+            topBar.updatePageDisplay(currentPage, totalPages);
+        });
+
+        // Show Driver.js-style onboarding for first-time users
+        SwingUtilities.invokeLater(() -> {
+            if (OnboardingOverlay.shouldShowOnboarding()) {
+                showOnboardingTour();
+            }
+        });
+    }
+
+    /**
+     * Sets up keyboard shortcuts for the application.
+     */
+    private void setupKeyboardShortcuts() {
+        KeyboardShortcutManager.setupDefaultShortcuts(
+            shortcutManager,
+            this::openPdf,                                    // Ctrl+O - Open PDF
+            () -> new SettingsDialog(this).setVisible(true),  // Ctrl+, - Settings
+            this::verifyAllSignatures,                        // Ctrl+Shift+V - Verify All
+            signModeController::resetSignModeUI               // Escape - Cancel
+        );
+    }
+
+    /**
+     * Shows the Driver.js-style onboarding tour with spotlight effects.
+     */
+    private void showOnboardingTour() {
+        OnboardingOverlay onboarding = new OnboardingOverlay(this);
+
+        // Step 1: Open PDF button
+        onboarding.addStep(
+            topBar.getOpenButton(),
+            "Open PDF",
+            "Click here to open a PDF file for viewing and signing. You can also drag and drop PDF files directly onto the window.",
+            OnboardingOverlay.TooltipPosition.BOTTOM
+        );
+
+        // Step 2: Recent Files button
+        onboarding.addStep(
+            topBar.getRecentButton(),
+            "Recent Files",
+            "Quickly access your recently opened PDF files from this dropdown menu.",
+            OnboardingOverlay.TooltipPosition.BOTTOM
+        );
+
+        // Step 3: The main viewer area (placeholder panel)
+        onboarding.addStep(
+            placeholderPanel,
+            "PDF Viewer",
+            "Your PDF document will be displayed here. Use the scroll wheel to navigate through pages.",
+            OnboardingOverlay.TooltipPosition.TOP
+        );
+
+        // Step 4: Sign button (point to center panel where sign button will appear)
+        onboarding.addStep(
+            topBar.getCenterPanel(),
+            "Sign Document",
+            "After opening a PDF, click 'Begin Sign' to start the signing process. Draw a rectangle where you want your signature to appear.",
+            OnboardingOverlay.TooltipPosition.BOTTOM
+        );
+
+        // Step 5: Settings button
+        onboarding.addStep(
+            topBar.getSettingsButton(),
+            "Settings",
+            "Configure your digital certificate (keystore), signature appearance, and other preferences here.",
+            OnboardingOverlay.TooltipPosition.BOTTOM
+        );
+
+        onboarding.setOnComplete(() -> {
+            log.info("Onboarding tour completed");
+        });
+
+        onboarding.start();
+    }
+
+    /**
+     * Navigates to a specific page (0-based index).
+     */
+    private void navigateToPage(int pageIndex) {
+        if (pdfScrollPane != null) {
+            pdfScrollPane.scrollToPage(pageIndex);
+            // Update page display in topBar
+            int totalPages = pdfRendererService.getPageCountSafe();
+            topBar.updatePageDisplay(pageIndex + 1, totalPages);
+        }
+    }
+
+    /* --------------------------
+       Public helpers / API
+     --------------------------- */
+
+    public void setWindowTitle(String titlePath) {
+        String generated = Utils.truncateText(APP_NAME, titlePath, 70);
+        setTitle(generated);
+    }
+
+    /**
+     * Layouts the overlay components (PDF viewer, signature panel, and floating button).
+     */
+    private void layoutOverlayComponents() {
+        if (layeredPane == null) return;
+
+        int width = layeredPane.getWidth();
+        int height = layeredPane.getHeight();
+
+        if (width <= 0 || height <= 0) return;
+
+        // PDF scroll pane takes full width/height (base layer)
+        pdfScrollPane.setBounds(0, 0, width, height);
+
+        // Signature panel overlay on right side (top layer)
+        // Only position if panel is visible (not closed)
+        if (signaturePanel.isVisible() && !signaturePanel.isClosed()) {
+            int panelWidth = signaturePanel.getPreferredSize().width;
+            signaturePanel.setBounds(width - panelWidth, 0, panelWidth, height);
+        } else {
+            // Hide panel completely when closed
+            signaturePanel.setBounds(width, 0, 0, height);
+        }
+
+        // Ensure components are in layered pane
+        if (pdfScrollPane.getParent() != layeredPane) {
+            layeredPane.add(pdfScrollPane, JLayeredPane.DEFAULT_LAYER);
+        }
+        if (signaturePanel.getParent() != layeredPane) {
+            layeredPane.add(signaturePanel, JLayeredPane.PALETTE_LAYER);
+        }
+
+        layeredPane.revalidate();
+        layeredPane.repaint();
+    }
+
+    public void renderPdfFromPath(String filePath) {
+        File file = new File(filePath);
+        if (!file.exists()) {
+            DialogUtils.showError(this, "Error", "File not found: " + filePath);
+            return;
+        }
+        selectedPdfFile = file;
+        loadAndRenderPdf(file);
+    }
+
+    /* --------------------------
+       Internal wiring
+     --------------------------- */
+
+    private void showPlaceholder(boolean show) {
+        if (show) {
+            pdfScrollPane.setViewportView(placeholderPanel);
+            topBar.setSignButtonVisible(false);
+            topBar.setSignButtonCertified(false); // Reset certified state
+            topBar.setPageInfoText("");
+            signaturePanel.clearSignatures();
+            signaturePanel.setVisible(false); // Hide signature panel when no PDF
+            verificationBanner.hideBanner(); // Hide verification banner when no PDF
+        } else {
+            pdfScrollPane.setViewportView(pdfScrollPane.getPdfPanel());
+            topBar.setSignButtonVisible(true);
+            // Signature panel visibility is handled by verifyAndUpdateSignatures
+            // Don't show panel here - wait for verification to complete
+        }
+        signModeController.resetSignModeUI();
+        layoutOverlayComponents(); // Update layout
+    }
+
+    private void setLoadingState(boolean loading) {
+        CursorStateManager cursorManager = CursorStateManager.getInstance();
+
+        if (loading) {
+            cursorManager.pushCursor(Cursor.WAIT_CURSOR, "pdf-loading");
+        } else {
+            cursorManager.popCursor("pdf-loading");
+        }
+
+        topBar.setLoading(loading);
+    }
+
+    private void openPdf() {
+        // Use JFileChooser for all platforms with macOS-specific configuration
+        JFileChooser chooser = new JFileChooser();
+
+        String lastDir = prefs.get(LAST_DIR_KEY, null);
+        if (lastDir != null) {
+            chooser.setCurrentDirectory(new File(lastDir));
+        }
+
+        // Configure file filter for PDF files
+        chooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("PDF Files", "pdf"));
+        chooser.setAcceptAllFileFilterUsed(false);
+
+        // macOS-specific: Enable file system access with proper settings
+        if (System.getProperty("os.name").toLowerCase().contains("mac")) {
+            // Use system properties already set in App.java for native look and feel
+            chooser.setFileHidingEnabled(false); // Show hidden files if needed
+            chooser.setMultiSelectionEnabled(false);
+        }
+
+        if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+            selectedPdfFile = chooser.getSelectedFile();
+
+            File parentDir = selectedPdfFile.getParentFile();
+            if (parentDir != null) {
+                prefs.put(LAST_DIR_KEY, parentDir.getAbsolutePath());
+            }
+            loadAndRenderPdf(selectedPdfFile);
+        }
+    }
+
+    /**
+     * Resets all PDF-related state and UI components.
+     * Should be called before loading a new PDF to ensure clean lifecycle.
+     */
+    private void resetPdfState() {
+        log.info("Resetting PDF state for new document load");
+
+        // Reset verification components
+        verificationService.reset();
+        verificationBanner.reset();
+        signaturePanel.reset();
+        colorManager.reset();
+
+        // Reset sign mode
+        signModeController.resetSignModeUI();
+
+        // Clear PDF state
+        selectedPdfFile = null;
+        pdfPassword = null;
+
+        // Reset UI
+        topBar.setSignButtonVisible(false);
+        topBar.setPageInfoText("");
+        setWindowTitle(null);
+
+        log.debug("PDF state reset completed");
+    }
+
+    private void loadAndRenderPdf(File file) {
+        // Reset all state before loading new PDF
+        resetPdfState();
+
+        setLoadingState(true);
+        SwingUtilities.invokeLater(() -> {
+            boolean ok = pdfRendererService.render(file); // handles password internally
+
+            // Don't clear loading state yet - keep WAIT cursor during verification
+            // setLoadingState(false); // Removed - will be cleared after verification
+
+            if (ok) {
+                // Update state
+                selectedPdfFile = file;
+                setWindowTitle(file.getAbsolutePath());
+
+                // Add to recent files
+                recentFilesManager.addRecentFile(file);
+
+                // Initialize with signing disabled until verification completes
+                topBar.setSignButtonCertified(true); // Temporarily disable until we verify
+                topBar.setSignButtonVisible(true);
+
+                showPlaceholder(false);
+
+                // Update page display - retry logic handles timing internally
+                pdfScrollPane.forceUpdatePageDisplay();
+
+                // Update page navigation display
+                int totalPages = pdfRendererService.getPageCountSafe();
+                topBar.updatePageDisplay(1, totalPages);
+
+                // Verify signatures and update signature panel
+                // Keep cursor in WAIT state during verification
+                verifyAndUpdateSignatures(file);
+            } else {
+                selectedPdfFile = null;
+                topBar.setSignButtonVisible(false);
+                topBar.setPageInfoText("");
+                showPlaceholder(true);
+                setLoadingState(false); // Clear loading state on error
+            }
+        });
+    }
+
+    /**
+     * Verifies all signatures in the PDF and updates the signature panel.
+     * Only shows panel if signatures are found.
+     */
+    private void verifyAndUpdateSignatures(File pdfFile) {
+        // Reset color manager for new PDF
+        colorManager.reset();
+
+        // Check if PDF is password-protected and signed
+        // If yes, skip verification and show info banner (iText 5 limitation)
+        boolean isEncrypted = pdfRendererService.isCurrentPdfEncrypted();
+        boolean hasPdfPassword = pdfPassword != null && !pdfPassword.isEmpty();
+
+        if (isEncrypted && hasPdfPassword) {
+            // Quick check if PDF has signatures without full verification
+            new Thread(() -> {
+                try {
+                    com.itextpdf.text.pdf.PdfReader quickReader = new com.itextpdf.text.pdf.PdfReader(
+                            pdfFile.getAbsolutePath(), pdfPassword.getBytes());
+                    com.itextpdf.text.pdf.AcroFields acroFields = quickReader.getAcroFields();
+                    boolean hasSigs = acroFields != null && !acroFields.getSignatureNames().isEmpty();
+                    quickReader.close();
+
+                    if (hasSigs) {
+                        // Password-protected signed PDF - show info banner and skip verification
+                        SwingUtilities.invokeLater(() -> {
+                            setLoadingState(false);
+                            verificationBanner.showPasswordProtectedSigned();
+                            signaturePanel.clearSignatures();
+                            signaturePanel.setVisible(false);
+
+                            // Enable signing for password-protected signed PDFs
+                            // Since we cannot verify certification level, we allow signing
+                            topBar.setSignButtonCertified(false);
+                            topBar.setSignButtonTooltip("Note: Signature verification is not available for password-protected PDFs");
+                            log.info("Password-protected signed PDF detected - signature verification skipped but signing enabled");
+
+                            layoutOverlayComponents();
+                        });
+                        return;
+                    }
+                } catch (Exception e) {
+                    log.error("Error checking for signatures in encrypted PDF", e);
+                }
+
+                // No signatures or error checking - proceed normally
+                SwingUtilities.invokeLater(() -> {
+                    setLoadingState(false);
+                    verificationBanner.hideBanner();
+                    signaturePanel.clearSignatures();
+                    signaturePanel.setVisible(false);
+
+                    // Enable signing for password-protected unsigned PDFs
+                    topBar.setSignButtonCertified(false);
+                    log.info("Password-protected unsigned PDF - signing enabled");
+
+                    layoutOverlayComponents();
+                });
+            }, "Quick-Signature-Check-Thread").start();
+            return;
+        }
+
+        // Show verification progress in banner and panel + disable buttons
+        SwingUtilities.invokeLater(() -> {
+            verificationBanner.showVerifying();
+            signaturePanel.setVerifying(true); // Disable verify all button
+            if (signaturePanel.isVisible()) {
+                signaturePanel.setVerificationStatus("Verifying signatures...");
+            }
+        });
+
+        // Run verification in background to avoid blocking UI
+        new Thread(() -> {
+            try {
+                // Set progress listener for visual feedback - update both banner and panel
+                verificationService.setProgressListener(message ->
+                        SwingUtilities.invokeLater(() -> {
+                            verificationBanner.updateProgress(message);
+                            signaturePanel.setVerificationStatus(message);
+                        })
+                );
+
+                List<SignatureVerificationService.SignatureVerificationResult> results =
+                        verificationService.verifySignatures(pdfFile, pdfPassword);
+
+                // Update UI on EDT
+                SwingUtilities.invokeLater(() -> {
+                    // Clear loading cursor state - verification complete
+                    setLoadingState(false);
+
+                    // Re-enable buttons
+                    signaturePanel.setVerifying(false);
+
+                    // Clear status message
+                    signaturePanel.setVerificationStatus("");
+
+                    if (results != null && !results.isEmpty()) {
+                        // Apply PDF viewer certification logic for Begin Sign button
+                        // Get LAST signature (most recent)
+                        SignatureVerificationService.SignatureVerificationResult lastSig = results.get(results.size() - 1);
+                        com.trexolab.model.CertificationLevel lastCertLevel = lastSig.getCertificationLevel();
+
+                        // Begin Sign button logic (PDF viewer style)
+                        boolean allowsSignatures = lastCertLevel.allowsSignatures(); // true only for NOT_CERTIFIED
+                        topBar.setSignButtonCertified(!allowsSignatures);
+
+                        if (!allowsSignatures) {
+                            // Certified - show simple message
+                            String tooltipMsg = "This document is certified. You cannot add more signatures.";
+                            topBar.setSignButtonTooltip(tooltipMsg);
+                            log.info("Signing DISABLED: " + tooltipMsg);
+                        } else {
+                            // Not certified - signing allowed
+                            topBar.setSignButtonTooltip(null);
+                            log.info("Signing ENABLED: Document allows additional signatures");
+                        }
+
+                        // PDF is signed - update signature panel and auto-open it
+                        signaturePanel.updateSignatures(results);
+                        signaturePanel.setVisible(true); // Make toggle button visible
+
+                        // Update verification banner with results
+                        verificationBanner.updateStatus(results);
+
+                        // Draw colored rectangles on PDF pages
+                        drawSignatureRectangles(results);
+
+                        log.info("Signature panel updated with " + results.size() + " signature(s)");
+                    } else {
+                        // PDF is not signed - enable signing (unsigned PDF, signing allowed)
+                        topBar.setSignButtonCertified(false);
+                        topBar.setSignButtonTooltip(null);
+
+                        // Hide signature panel and banner
+                        signaturePanel.clearSignatures();
+                        signaturePanel.setVisible(false);
+                        verificationBanner.hideBanner();
+                        log.info("No signatures found - signature panel hidden, signing enabled");
+                    }
+                    layoutOverlayComponents();
+                });
+            } catch (Exception e) {
+                log.error("Error verifying signatures", e);
+                SwingUtilities.invokeLater(() -> {
+                    // Clear loading cursor state on error
+                    setLoadingState(false);
+
+                    // Re-enable buttons
+                    signaturePanel.setVerifying(false);
+
+                    signaturePanel.setVerificationStatus("Verification failed");
+                    signaturePanel.clearSignatures();
+                    signaturePanel.setVisible(false);
+                    verificationBanner.hideBanner();
+                    layoutOverlayComponents();
+                });
+            }
+        }, "Signature-Verification-Thread").start();
+    }
+
+    /**
+     * Requirement 2: Verifies all signatures manually when user clicks verify all button.
+     */
+    private void verifyAllSignatures() {
+        if (selectedPdfFile == null) {
+            return;
+        }
+
+        log.info("User triggered verify all signatures");
+
+        // Show progress message + disable buttons
+        signaturePanel.setVerificationStatus("Verifying all signatures...");
+        signaturePanel.setVerifying(true); // Disable verify all button
+
+        // Re-run verification in background
+        new Thread(() -> {
+            try {
+                // Set progress listener for visual feedback
+                verificationService.setProgressListener(message ->
+                        SwingUtilities.invokeLater(() -> signaturePanel.setVerificationStatus(message))
+                );
+
+                List<SignatureVerificationService.SignatureVerificationResult> results =
+                        verificationService.verifySignatures(selectedPdfFile, pdfPassword);
+
+                // Update UI on EDT
+                SwingUtilities.invokeLater(() -> {
+                    signaturePanel.setVerificationStatus(""); // Clear status
+                    signaturePanel.setVerifying(false); // Re-enable buttons
+
+                    if (results != null && !results.isEmpty()) {
+                        signaturePanel.updateSignatures(results);
+
+                        // Update verification banner with new results
+                        verificationBanner.updateStatus(results);
+
+                        // Redraw signature rectangles
+                        pdfRendererService.hideSignedSignatureOverlays();
+                        drawSignatureRectangles(results);
+
+                        log.info("Verified " + results.size() + " signature(s)");
+                    }
+                });
+            } catch (Exception e) {
+                log.error("Error during manual verification", e);
+                SwingUtilities.invokeLater(() -> {
+                    signaturePanel.setVerificationStatus("Verification failed");
+                    signaturePanel.setVerifying(false); // Re-enable buttons
+                });
+            }
+        }, "Manual-Signature-Verification-Thread").start();
+    }
+
+    /**
+     * Draws colored rectangles on PDF pages to highlight signature locations.
+     * Each signature gets a unique color from colorManager that matches the signature panel card.
+     */
+    private void drawSignatureRectangles(List<SignatureVerificationService.SignatureVerificationResult> results) {
+        if (results == null || results.isEmpty()) {
+            log.info("No signature rectangles to draw");
+            return;
+        }
+
+        log.info("Drawing " + results.size() + " signature rectangle(s) on PDF pages");
+
+        // Delegate to PDF renderer service to show overlays (with scrollPane for auto-scroll)
+        pdfRendererService.showSignedSignatureOverlays(results, colorManager, pdfScrollPane);
+    }
+
+    private void enableDragAndDrop(JComponent component) {
+        new DropTarget(component, DnDConstants.ACTION_COPY, new DropTargetListener() {
+
+            @Override
+            public void dragEnter(DropTargetDragEvent dtde) {
+                if (dtde.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
+                    component.setBorder(BorderFactory.createLineBorder(Color.BLUE, 2));
+                    dtde.acceptDrag(DnDConstants.ACTION_COPY);
+                } else {
+                    dtde.rejectDrag();
+                }
+            }
+
+            @Override
+            public void dragOver(DropTargetDragEvent dtde) {
+            }
+
+            @Override
+            public void dropActionChanged(DropTargetDragEvent dtde) {
+            }
+
+            @Override
+            public void dragExit(DropTargetEvent dte) {
+                component.setBorder(null);
+            }
+
+            @Override
+            public void drop(DropTargetDropEvent dtde) {
+                component.setBorder(null);
+                try {
+                    Transferable tr = dtde.getTransferable();
+                    if (tr.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
+                        dtde.acceptDrop(DnDConstants.ACTION_COPY);
+                        List<File> files = (List<File>) tr.getTransferData(DataFlavor.javaFileListFlavor);
+                        for (File file : files) {
+                            if (file.getName().toLowerCase().endsWith(".pdf")) {
+                                selectedPdfFile = file;
+                                loadAndRenderPdf(file);
+                                break; // only handle the first PDF
+                            }
+                        }
+                        dtde.dropComplete(true);
+                    } else {
+                        dtde.rejectDrop();
+                    }
+                } catch (Exception ex) {
+                    dtde.dropComplete(false);
+                    log.error("Drag-and-drop failed", ex);
+                }
+            }
+        }, true, null);
+    }
+
+    /* --------------------------
+       Sign mode lifecycle hooks
+     --------------------------- */
+
+    private void onSignStart() {
+        // Disable open/settings while in sign mode
+        topBar.setInteractiveEnabled(false);
+    }
+
+    private void onSignDone() {
+        // Re-enable controls after signing flow completes or cancels
+        topBar.setInteractiveEnabled(true);
+    }
+
+    public String getPdfPassword() {
+        return pdfPassword;
+    }
+
+    public void setPdfPassword(String pdfPassword) {
+        this.pdfPassword = pdfPassword;
+    }
+
+    /**
+     * Releases the PDF document from memory before signing.
+     * This frees up heap space for memory-intensive signing operations.
+     * The rendered images remain visible.
+     */
+    public void releaseDocumentForSigning() {
+        pdfRendererService.releaseDocumentMemory();
+    }
+
+    /**
+     * Triggers sign mode for a specific signature field when user clicks on overlay.
+     * This is called automatically when unsigned field overlays are clicked.
+     */
+    public void triggerSignModeForField(com.trexolab.service.SignatureFieldDetectionService.SignatureFieldInfo field) {
+        log.info("Triggering sign mode for field: " + field.getFieldName());
+
+        // Enable sign mode if not already enabled
+        if (!topBar.isSignModeEnabled()) {
+            signModeController.toggleSignMode();
+        }
+
+        // Delegate to sign mode controller to handle the field click
+        signModeController.signExistingField(field);
+    }
+}

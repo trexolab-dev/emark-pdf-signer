@@ -1,0 +1,97 @@
+{
+  "name": "eMark PDF Signer - Free PDF Signing Tool",
+  "short_name": "eMark PDF Signer",
+  "description": "Free, open-source PDF signing tool. Sign documents with digital certificates. Adobe Reader DC alternative for Windows, macOS, and Linux.",
+  "version": "1.0.0",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0c1222",
+  "theme_color": "#0ea5e9",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["productivity", "utilities", "business", "security"],
+  "icons": [
+    {
+      "src": "/images/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/images/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/images/logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/images/logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/images/main.png",
+      "sizes": "1920x1080",
+      "type": "image/png",
+      "label": "eMark PDF Signer main application window"
+    },
+    {
+      "src": "/images/signature-appearance.png",
+      "sizes": "1920x1080",
+      "type": "image/png",
+      "label": "Signature appearance customization"
+    },
+    {
+      "src": "/images/signed-pdf-view.png",
+      "sizes": "1920x1080",
+      "type": "image/png",
+      "label": "Signed PDF document view"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Download eMark PDF Signer",
+      "short_name": "Download",
+      "description": "Download eMark PDF Signer for your platform",
+      "url": "/#download",
+      "icons": [{"src": "/images/logo.png", "sizes": "96x96"}]
+    },
+    {
+      "name": "Installation Guide",
+      "short_name": "Install",
+      "description": "View installation instructions",
+      "url": "/installation",
+      "icons": [{"src": "/images/logo.png", "sizes": "96x96"}]
+    },
+    {
+      "name": "Features",
+      "short_name": "Features",
+      "description": "Explore eMark PDF Signer features",
+      "url": "/#features",
+      "icons": [{"src": "/images/logo.png", "sizes": "96x96"}]
+    }
+  ],
+  "related_applications": [
+    {
+      "platform": "windows",
+      "url": "https://github.com/trexolab-dev/emark-pdf-signer/releases/latest/download/emark-pdf-signer-Setup.exe",
+      "id": "emark-pdf-signer-Setup.exe"
+    },
+    {
+      "platform": "linux",
+      "url": "https://github.com/trexolab-dev/emark-pdf-signer/releases/latest/download/emark-pdf-signer.deb",
+      "id": "emark-pdf-signer.deb"
+    }
+  ],
+  "prefer_related_applications": false
+}

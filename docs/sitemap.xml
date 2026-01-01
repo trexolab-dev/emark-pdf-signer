@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9 ">
+
+    <!--
+    Note: This site uses hash-based routing (#/) for GitHub Pages compatibility.
+    Google ignores URL fragments (everything after #), so only the main URL is indexed.
+    All section content is on the main page and will be crawled from there.
+  -->
+
+    <!-- Home Page - Contains all sections (Features, Download, FAQ, Gallery, etc.) -->
+    <url>
+        <loc>https://trexolab-dev.github.io/emark-pdf-signer/</loc>
+        <lastmod>2025-12-06</lastmod>
+        <changefreq>weekly</changefreq>
+        <priority>1.0</priority>
+        <!-- Main application screenshot -->
+        <image:image>
+            <image:loc>https://trexolab-dev.github.io/emark-pdf-signer/images/main.png</image:loc>
+            <image:title>eMark PDF Signer - Free PDF Signing Tool Application Window</image:title>
+            <image:caption>eMark PDF Signer application main interface showing PDF document signing with digital certificates
+            </image:caption>
+        </image:image>
+        <!-- Logo -->
+        <image:image>
+            <image:loc>https://trexolab-dev.github.io/emark-pdf-signer/images/logo.png</image:loc>
+            <image:title>eMark PDF Signer Logo - Free Open Source PDF Signer</image:title>
+            <image:caption>eMark PDF Signer official logo for the free PDF signing software</image:caption>
+        </image:image>
+        <!-- Open Graph Image -->
+        <image:image>
+            <image:loc>https://trexolab-dev.github.io/emark-pdf-signer/assets/og-image.png</image:loc>
+            <image:title>eMark PDF Signer Open Graph Image</image:title>
+            <image:caption>eMark PDF Signer - Professional PDF signing made simple</image:caption>
+        </image:image>
+        <!-- Signature Appearance -->
+        <image:image>
+            <image:loc>https://trexolab-dev.github.io/emark-pdf-signer/images/signature-appearance.png</image:loc>
+            <image:title>eMark PDF Signer Signature Appearance Customization</image:title>
+            <image:caption>Customize your digital signature appearance with text, images, and formatting</image:caption>
+        </image:image>
+        <!-- Signed PDF View -->
+        <image:image>
+            <image:loc>https://trexolab-dev.github.io/emark-pdf-signer/images/signed-pdf-view.png</image:loc>
+            <image:title>Signed PDF Document View in eMark PDF Signer</image:title>
+            <image:caption>View and verify digitally signed PDF documents</image:caption>
+        </image:image>
+        <!-- PDF Viewer -->
+        <image:image>
+            <image:loc>https://trexolab-dev.github.io/emark-pdf-signer/images/pdf-view.png</image:loc>
+            <image:title>eMark PDF Signer PDF Viewer</image:title>
+            <image:caption>Built-in PDF viewer for document preview before signing</image:caption>
+        </image:image>
+        <!-- Certificate Selection -->
+        <image:image>
+            <image:loc>https://trexolab-dev.github.io/emark-pdf-signer/images/certificate-selection.png</image:loc>
+            <image:title>Certificate Selection Dialog</image:title>
+            <image:caption>Select digital certificate from PKCS#12, USB token, or Windows store</image:caption>
+        </image:image>
+        <!-- Keystore Settings -->
+        <image:image>
+            <image:loc>https://trexolab-dev.github.io/emark-pdf-signer/images/setting-keystore.png</image:loc>
+            <image:title>eMark PDF Signer Keystore Configuration Settings</image:title>
+            <image:caption>Configure PKCS#12 and PFX digital certificates in eMark PDF Signer settings</image:caption>
+        </image:image>
+        <!-- Security Settings -->
+        <image:image>
+            <image:loc>https://trexolab-dev.github.io/emark-pdf-signer/images/setting-security.png</image:loc>
+            <image:title>eMark PDF Signer Security Settings</image:title>
+            <image:caption>Security configuration panel for certificate and signing options</image:caption>
+        </image:image>
+        <!-- Architecture Diagrams -->
+        <image:image>
+            <image:loc>https://trexolab-dev.github.io/emark-pdf-signer/diagrams/System_Architecture_Diagram.svg</image:loc>
+            <image:title>eMark PDF Signer System Architecture Diagram</image:title>
+            <image:caption>Technical architecture diagram showing eMark PDF Signer system components</image:caption>
+        </image:image>
+        <image:image>
+            <image:loc>https://trexolab-dev.github.io/emark-pdf-signer/diagrams/Workflow.svg</image:loc>
+            <image:title>eMark PDF Signer PDF Signing Workflow</image:title>
+            <image:caption>Step-by-step workflow diagram for PDF digital signing process</image:caption>
+        </image:image>
+        <image:image>
+            <image:loc>https://trexolab-dev.github.io/emark-pdf-signer/diagrams/Component_Interaction_Diagram.svg</image:loc>
+            <image:title>eMark PDF Signer Component Interaction</image:title>
+            <image:caption>Diagram showing how eMark PDF Signer components interact during PDF signing</image:caption>
+        </image:image>
+    </url>
+
+</urlset>

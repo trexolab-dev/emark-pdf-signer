@@ -1,0 +1,116 @@
+#!/bin/bash
+# ============================================================================
+# eMark PDF Signer - Launcher Script for macOS
+# TrexoLab - https://trexolab.com
+# ============================================================================
+#
+# This script launches eMark PDF Signer with the bundled JRE 8 x64.
+# Supports opening PDF files via command line or file association.
+#
+# MEMORY PROFILES:
+#   normal  (default): -Xmx2g
+#   large:             -Xmx4g
+#   xlarge:            -Xmx8g
+#
+# Usage:
+#   emark                        # Normal profile
+#   emark large                  # Large profile
+#   emark xlarge                 # Extra Large profile
+#   emark /path/to/file.pdf     # Open PDF (normal profile)
+#   emark large /path/to/file.pdf  # Open PDF (large profile)
+# ============================================================================
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# For .app bundle, adjust path if inside Contents/MacOS
+if [[ "$SCRIPT_DIR" == *"/Contents/MacOS" ]]; then
+    RESOURCES_DIR="$(cd "$SCRIPT_DIR/../Resources" && pwd)"
+else
+    RESOURCES_DIR="$SCRIPT_DIR"
+fi
+
+# Bundled JRE location (try macOS JRE structure first)
+JAVA_EXE="$RESOURCES_DIR/jre8-x64/Contents/Home/bin/java"
+
+# Fallback for standard JRE structure
+if [ ! -x "$JAVA_EXE" ]; then
+    JAVA_EXE="$RESOURCES_DIR/jre8-x64/bin/java"
+fi
+
+# JAR file location
+JAR_FILE="$RESOURCES_DIR/eMark-PDF-Signer.jar"
+
+# Validate bundled Java runtime exists
+if [ ! -x "$JAVA_EXE" ]; then
+    osascript -e 'display dialog "Java Runtime Not Found\n\nThe bundled Java 8 runtime was not found.\n\nPlease reinstall eMark PDF Signer." buttons {"OK"} default button "OK" with icon stop with title "eMark PDF Signer"'
+    exit 1
+fi
+
+# Validate JAR file exists
+if [ ! -f "$JAR_FILE" ]; then
+    osascript -e 'display dialog "Application Not Found\n\nThe application JAR file was not found.\n\nPlease reinstall eMark PDF Signer." buttons {"OK"} default button "OK" with icon stop with title "eMark PDF Signer"'
+    exit 1
+fi
+
+# Parse arguments - detect profile and/or PDF file path
+PROFILE="normal"
+PDF_FILE=""
+
+# Check first argument
+ARG1="${1:-}"
+ARG2="${2:-}"
+
+if [ -n "$ARG1" ]; then
+    # Convert to lowercase for comparison
+    ARG1_LOWER=$(echo "$ARG1" | tr '[:upper:]' '[:lower:]')
+
+    case "$ARG1_LOWER" in
+        normal)
+            PROFILE="normal"
+            PDF_FILE="$ARG2"
+            ;;
+        large)
+            PROFILE="large"
+            PDF_FILE="$ARG2"
+            ;;
+        xlarge)
+            PROFILE="xlarge"
+            PDF_FILE="$ARG2"
+            ;;
+        *)
+            # Not a profile, assume it's a file path
+            PDF_FILE="$ARG1"
+            ;;
+    esac
+fi
+
+# Set Java options based on profile
+case "$PROFILE" in
+    normal)
+        JAVA_OPTS="-Xms512m -Xmx2g -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
+        ;;
+    large)
+        JAVA_OPTS="-Xms512m -Xmx4g -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
+        ;;
+    xlarge)
+        JAVA_OPTS="-Xms1g -Xmx8g -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
+        ;;
+esac
+
+# macOS-specific Java options
+JAVA_OPTS="$JAVA_OPTS -Xdock:name=eMark PDF Signer"
+JAVA_OPTS="$JAVA_OPTS -Dapple.awt.application.name=eMark PDF Signer"
+JAVA_OPTS="$JAVA_OPTS -Dapple.laf.useScreenMenuBar=true"
+
+# Add dock icon if available
+if [ -f "$RESOURCES_DIR/emark.icns" ]; then
+    JAVA_OPTS="$JAVA_OPTS -Xdock:icon=$RESOURCES_DIR/emark.icns"
+fi
+
+# Launch the application
+if [ -n "$PDF_FILE" ]; then
+    exec "$JAVA_EXE" $JAVA_OPTS -jar "$JAR_FILE" "$PDF_FILE"
+else
+    exec "$JAVA_EXE" $JAVA_OPTS -jar "$JAR_FILE"
+fi

@@ -1,0 +1,145 @@
+name: 🐛 Bug Report
+description: Report a bug to help us improve eMark PDF Signer
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Thank you for reporting a bug!
+        Please fill out the form below to help us understand and fix the issue.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Pre-flight Checklist
+      description: Please confirm the following before submitting.
+      options:
+        - label: I have searched [existing issues](https://github.com/trexolab-dev/emark-pdf-signer/issues) and this bug has not been reported.
+          required: true
+        - label: I am using the latest version of eMark PDF Signer.
+          required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: Provide a clear and concise description of the bug.
+      placeholder: Describe what the bug is and how it affects your workflow.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+      placeholder: Describe the expected outcome.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually happened instead?
+      placeholder: Describe what occurred instead of the expected behavior.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Provide detailed steps to reproduce the bug.
+      placeholder: |
+        1. Open eMark PDF Signer...
+        2. Navigate to...
+        3. Click on...
+        4. Observe the error...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Operating System
+      description: Which OS are you using?
+      options:
+        - Windows 11
+        - Windows 10
+        - Windows 8.1
+        - Windows 8
+        - Windows 7
+        - macOS Sequoia (15.x)
+        - macOS Sonoma (14.x)
+        - macOS Ventura (13.x)
+        - macOS Monterey (12.x)
+        - macOS Big Sur (11.x)
+        - macOS Catalina (10.15)
+        - macOS Mojave (10.14)
+        - macOS High Sierra (10.13)
+        - Ubuntu / Debian
+        - Fedora / RHEL
+        - Arch Linux
+        - Other Linux
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: eMark PDF Signer Version
+      description: Which version of eMark PDF Signer are you using?
+      placeholder: e.g., v1.0.3
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: How severe is this bug for your use case?
+      options:
+        - 🟢 Low - Minor issue, workaround available
+        - 🟡 Medium - Affects functionality but usable
+        - 🟠 High - Major feature broken
+        - 🔴 Critical - App crashes or data loss
+    validations:
+      required: true
+
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: Frequency
+      description: How often does this bug occur?
+      options:
+        - Always (100%)
+        - Often (>50%)
+        - Sometimes (<50%)
+        - Rarely (<10%)
+        - Only once
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error Logs / Console Output
+      description: If applicable, paste any error messages or console output.
+      placeholder: Paste error logs here...
+      render: shell
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots / Screen Recording
+      description: If applicable, add screenshots or a screen recording to help explain the problem.
+      placeholder: Drag & drop images here or paste a link to a screen recording.
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Any other information that might help us debug the issue.
+      placeholder: Include any relevant details like network conditions, specific files, etc.

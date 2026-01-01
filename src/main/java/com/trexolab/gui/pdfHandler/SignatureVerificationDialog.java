@@ -1,0 +1,237 @@
+package com.trexolab.gui.pdfHandler;
+
+import com.trexolab.core.keyStoresProvider.X509SubjectUtils;
+import com.trexolab.service.SignatureVerificationService.SignatureVerificationResult;
+import com.trexolab.service.SignatureVerificationService.VerificationStatus;
+import com.trexolab.utils.UIConstants;
+
+import javax.swing.*;
+import javax.swing.border.EmptyBorder;
+import java.awt.*;
+
+/**
+ * Quick signature verification status dialog shown when user clicks on signature rectangle.
+ * Shows essential verification info and provides option to view detailed properties.
+ */
+public class SignatureVerificationDialog extends JDialog {
+
+    private final SignatureVerificationResult result;
+    private final Color signatureColor;
+
+    public SignatureVerificationDialog(Frame parent, SignatureVerificationResult result, Color signatureColor) {
+        super(parent, "Signature Verification", true);
+        this.result = result;
+        this.signatureColor = signatureColor;
+
+        setupDialog();
+        createUI();
+    }
+
+    private void setupDialog() {
+        setSize(420, 240);
+        setLocationRelativeTo(getParent());
+        setResizable(false);
+        getContentPane().setBackground(UIConstants.Colors.BG_PRIMARY);
+    }
+
+    private void createUI() {
+        JPanel mainPanel = new JPanel(new BorderLayout(10, 10));
+        mainPanel.setBackground(UIConstants.Colors.BG_PRIMARY);
+        mainPanel.setBorder(UIConstants.Padding.LARGE);
+
+        // Header panel with colored bar and status icon
+        JPanel headerPanel = createHeaderPanel();
+        mainPanel.add(headerPanel, BorderLayout.NORTH);
+
+        // Content panel with verification status
+        JPanel contentPanel = createContentPanel();
+        mainPanel.add(contentPanel, BorderLayout.CENTER);
+
+        add(mainPanel);
+    }
+
+    private JPanel createHeaderPanel() {
+        JPanel panel = new JPanel(new BorderLayout(12, 0));
+        panel.setBackground(UIConstants.Colors.BG_PRIMARY);
+
+        // Colored bar on left (signature color)
+        JPanel colorBar = new JPanel();
+        colorBar.setBackground(signatureColor);
+        colorBar.setPreferredSize(new Dimension(6, 60));
+        panel.add(colorBar, BorderLayout.WEST);
+
+        // Status icon
+        JLabel statusIcon = createStatusIcon();
+        panel.add(statusIcon, BorderLayout.CENTER);
+
+        // Status text
+        JPanel statusTextPanel = new JPanel();
+        statusTextPanel.setLayout(new BoxLayout(statusTextPanel, BoxLayout.Y_AXIS));
+        statusTextPanel.setBackground(UIConstants.Colors.BG_PRIMARY);
+
+        String signerName = X509SubjectUtils.extractCommonNameFromDN(result.getCertificateSubject());
+        if (signerName == null || signerName.isEmpty()) {
+            signerName = result.getFieldName();
+        }
+
+        JLabel nameLabel = new JLabel(signerName);
+        nameLabel.setFont(UIConstants.Fonts.TITLE_BOLD);
+        nameLabel.setForeground(Color.WHITE);
+        nameLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JLabel statusLabel = new JLabel(result.getStatusMessage());
+        statusLabel.setFont(UIConstants.Fonts.LARGE_PLAIN);
+        statusLabel.setForeground(getStatusColor(result.getOverallStatus()));
+        statusLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        statusTextPanel.add(nameLabel);
+        statusTextPanel.add(Box.createRigidArea(new Dimension(0, 4)));
+        statusTextPanel.add(statusLabel);
+
+        panel.add(statusTextPanel, BorderLayout.EAST);
+
+        return panel;
+    }
+
+    private JPanel createContentPanel() {
+        JPanel panel = new JPanel();
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.setBackground(UIConstants.Colors.BG_TERTIARY);
+        panel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(UIConstants.Colors.BORDER_PRIMARY, 1),
+                new EmptyBorder(10, 15, 10, 15)
+        ));
+
+        // Simple, easy-to-understand labels
+        addInfoRow(panel, "Signature:", result.isSignatureValid() ? "Valid" : "Invalid",
+                result.isSignatureValid() ? UIConstants.Colors.STATUS_VALID : UIConstants.Colors.STATUS_ERROR);
+
+        addInfoRow(panel, "Document:", result.isDocumentIntact() ? "Not Modified" : "Modified",
+                result.isDocumentIntact() ? UIConstants.Colors.STATUS_VALID : UIConstants.Colors.STATUS_ERROR);
+
+        addInfoRow(panel, "Certificate Valid:", result.isCertificateValid() ? "Yes" : "No",
+                result.isCertificateValid() ? UIConstants.Colors.STATUS_VALID : UIConstants.Colors.STATUS_ERROR);
+
+        addInfoRow(panel, "Certificate Trusted:", result.isCertificateTrusted() ? "Yes" : "No",
+                result.isCertificateTrusted() ? UIConstants.Colors.STATUS_VALID : UIConstants.Colors.STATUS_WARNING);
+
+        // Revocation status - only show as valid if actually verified
+        boolean revocationValid = isRevocationActuallyValid(result);
+        String revocationText = result.isCertificateRevoked() ? "Revoked" :
+                               (revocationValid ? "Not Revoked" : "Not Checked");
+        Color revocationColor = result.isCertificateRevoked() ? UIConstants.Colors.STATUS_ERROR :
+                               (revocationValid ? UIConstants.Colors.STATUS_VALID : UIConstants.Colors.STATUS_WARNING);
+        addInfoRow(panel, "Revocation:", revocationText, revocationColor);
+
+        // Show timestamp or LTV status only if enabled
+        if (result.isTimestampValid() || result.hasLTV()) {
+            String additionalInfo = "";
+            if (result.isTimestampValid() && result.hasLTV()) {
+                additionalInfo = "Timestamp, LTV";
+            } else if (result.isTimestampValid()) {
+                additionalInfo = "Timestamp";
+            } else if (result.hasLTV()) {
+                additionalInfo = "LTV";
+            }
+            addInfoRow(panel, "Additional Security:", additionalInfo, UIConstants.Colors.STATUS_VALID);
+        }
+
+        return panel;
+    }
+
+    private void addInfoRow(JPanel panel, String label, String value, Color valueColor) {
+        JPanel row = new JPanel(new BorderLayout(10, 0));
+        row.setBackground(UIConstants.Colors.BG_TERTIARY);
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 26));
+        row.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JLabel labelComp = new JLabel(label);
+        labelComp.setFont(UIConstants.Fonts.LARGE_PLAIN);
+        labelComp.setForeground(UIConstants.Colors.TEXT_TERTIARY);
+
+        JLabel valueComp = new JLabel(value);
+        valueComp.setFont(UIConstants.Fonts.LARGE_BOLD);
+        valueComp.setForeground(valueColor);
+
+        row.add(labelComp, BorderLayout.WEST);
+        row.add(valueComp, BorderLayout.EAST);
+
+        panel.add(row);
+        panel.add(Box.createRigidArea(new Dimension(0, 8)));
+    }
+
+    private void showDetailedProperties() {
+        SignaturePropertiesDialog dialog = new SignaturePropertiesDialog(
+                (Frame) getParent(), result, signatureColor);
+        dialog.setVisible(true);
+    }
+
+    private JLabel createStatusIcon() {
+        VerificationStatus status = result.getOverallStatus();
+        String iconText;
+        Color iconColor;
+
+        switch (status) {
+            case VALID:
+                iconText = "OK";
+                iconColor = UIConstants.Colors.STATUS_VALID;
+                break;
+            case UNKNOWN:
+                iconText = "?";
+                iconColor = UIConstants.Colors.STATUS_WARNING;
+                break;
+            case INVALID:
+                iconText = "X";
+                iconColor = UIConstants.Colors.STATUS_ERROR;
+                break;
+            default:
+                iconText = "?";
+                iconColor = UIConstants.Colors.TEXT_DISABLED;
+        }
+
+        JLabel icon = new JLabel(iconText);
+        icon.setFont(new Font("Segoe UI", Font.BOLD, 32));
+        icon.setForeground(iconColor);
+        icon.setPreferredSize(new Dimension(40, 40));
+        icon.setHorizontalAlignment(SwingConstants.CENTER);
+
+        return icon;
+    }
+
+    private Color getStatusColor(VerificationStatus status) {
+        switch (status) {
+            case VALID:
+                return UIConstants.Colors.STATUS_VALID;
+            case UNKNOWN:
+                return UIConstants.Colors.STATUS_WARNING;
+            case INVALID:
+                return UIConstants.Colors.STATUS_ERROR;
+            default:
+                return UIConstants.Colors.TEXT_DISABLED;
+        }
+    }
+
+    /**
+     * Determines if revocation status is actually valid (verified as not revoked).
+     * Only returns true if revocation was ACTUALLY CHECKED and certificate is valid.
+     * Returns false for "Not Checked", "Validity Unknown", etc.
+     */
+    private boolean isRevocationActuallyValid(SignatureVerificationResult result) {
+        // Certificate is revoked - definitely not valid
+        if (result.isCertificateRevoked()) {
+            return false;
+        }
+
+        // Certificate is NOT revoked, but was revocation actually checked?
+        String revocationStatus = result.getRevocationStatus();
+        if (revocationStatus == null || revocationStatus.isEmpty()) {
+            return false; // No status = not checked
+        }
+
+        // Only return true if status explicitly contains "Valid"
+        // This includes: "Valid (Embedded OCSP)", "Valid (Embedded CRL)", "Valid (Live OCSP)"
+        // This excludes: "Not Checked", "Validity Unknown", etc.
+        return revocationStatus.contains("Valid");
+    }
+
+}

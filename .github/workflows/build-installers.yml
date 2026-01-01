@@ -1,0 +1,1013 @@
+# ============================================================================
+# eMark PDF Signer - Build and Release Workflow
+# TrexoLab - https://cispl-dev.github.io
+# ============================================================================
+#
+# This workflow builds installers for Windows, Linux, and macOS,
+# then creates a GitHub release with all artifacts.
+#
+# Triggers:
+#   - Push tags matching v* (e.g., v1.0.0, v1.0.1)
+#   - Manual trigger via workflow_dispatch
+#
+# Jobs:
+#   1. build-jar: Builds the Maven JAR (shared by all platforms)
+#   2. build-windows-x64: Builds Windows x64 installer (.exe)
+#   3. build-windows-x86: Builds Windows x86 (32-bit) installer (.exe)
+#   4. build-linux-x64: Builds Linux x64 packages (.deb, .tar.gz)
+#   5. build-linux-x86: Builds Linux x86 (32-bit) packages (.deb, .tar.gz)
+#   6. build-macos: Builds macOS x64 installer (.dmg)
+#   7. release: Creates GitHub release and uploads all installers
+#
+# IMPORTANT - Centralized Configuration:
+#   - This workflow reads configuration from config.yml (single source of truth)
+#   - The 'load-config' job parses config.yml and makes values available to all other jobs
+#   - JRE URLs, GitHub settings, and org info are all loaded from config.yml
+#   - To update settings, edit config.yml - changes will be picked up automatically
+#   - No need to edit this workflow file when changing JRE URLs or other config values!
+#
+# ============================================================================
+
+name: Build Installers
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Create a GitHub release'
+        required: false
+        default: false
+        type: boolean
+      release_version:
+        description: 'Release version (e.g., 1.0.0) - required if creating release'
+        required: false
+        default: ''
+        type: string
+
+env:
+  JAVA_VERSION: '8'
+  JAVA_DISTRIBUTION: 'temurin'
+
+jobs:
+  # ===========================================================================
+  # Load Configuration (reads from config.yml)
+  # ===========================================================================
+  load-config:
+    name: Load Configuration
+    runs-on: ubuntu-latest
+    outputs:
+      jre_windows_x64: ${{ steps.parse-config.outputs.jre_windows_x64 }}
+      jre_windows_x86: ${{ steps.parse-config.outputs.jre_windows_x86 }}
+      jre_linux_x64: ${{ steps.parse-config.outputs.jre_linux_x64 }}
+      jre_linux_x86: ${{ steps.parse-config.outputs.jre_linux_x86 }}
+      jre_macos_x64: ${{ steps.parse-config.outputs.jre_macos_x64 }}
+      github_owner: ${{ steps.parse-config.outputs.github_owner }}
+      github_repo: ${{ steps.parse-config.outputs.github_repo }}
+      org_name: ${{ steps.parse-config.outputs.org_name }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Parse config.yml
+        id: parse-config
+        run: |
+          # Install yq for YAML parsing
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+          CONFIG_FILE="config.yml"
+
+          echo "Parsing configuration from $CONFIG_FILE..."
+
+          # Extract JRE URLs
+          JRE_WIN_X64=$(yq '.build.jre.windows_x64' "$CONFIG_FILE")
+          JRE_WIN_X86=$(yq '.build.jre.windows_x86' "$CONFIG_FILE")
+          JRE_LINUX_X64=$(yq '.build.jre.linux_x64' "$CONFIG_FILE")
+          JRE_LINUX_X86=$(yq '.build.jre.linux_x86' "$CONFIG_FILE")
+          JRE_MACOS_X64=$(yq '.build.jre.macos_x64' "$CONFIG_FILE")
+
+          # Extract GitHub settings
+          GITHUB_OWNER=$(yq '.github.owner' "$CONFIG_FILE")
+          GITHUB_REPO=$(yq '.github.repo' "$CONFIG_FILE")
+
+          # Extract organization info
+          ORG_NAME=$(yq '.organization.name' "$CONFIG_FILE")
+
+          # Output variables
+          echo "jre_windows_x64=$JRE_WIN_X64" >> $GITHUB_OUTPUT
+          echo "jre_windows_x86=$JRE_WIN_X86" >> $GITHUB_OUTPUT
+          echo "jre_linux_x64=$JRE_LINUX_X64" >> $GITHUB_OUTPUT
+          echo "jre_linux_x86=$JRE_LINUX_X86" >> $GITHUB_OUTPUT
+          echo "jre_macos_x64=$JRE_MACOS_X64" >> $GITHUB_OUTPUT
+          echo "github_owner=$GITHUB_OWNER" >> $GITHUB_OUTPUT
+          echo "github_repo=$GITHUB_REPO" >> $GITHUB_OUTPUT
+          echo "org_name=$ORG_NAME" >> $GITHUB_OUTPUT
+
+          # Display loaded config
+          echo "✓ Configuration loaded successfully:"
+          echo "  GitHub: $GITHUB_OWNER/$GITHUB_REPO"
+          echo "  Organization: $ORG_NAME"
+          echo "  JRE Windows x64: $JRE_WIN_X64"
+          echo "  JRE Windows x86: $JRE_WIN_X86"
+          echo "  JRE Linux x64: $JRE_LINUX_X64"
+          echo "  JRE Linux x86: $JRE_LINUX_X86"
+          echo "  JRE macOS x64: $JRE_MACOS_X64"
+
+  # ===========================================================================
+  # Build JAR (shared artifact)
+  # ===========================================================================
+  build-jar:
+    needs: load-config
+    name: Build JAR
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Java 8
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          cache: 'maven'
+
+      - name: Build with Maven
+        run: mvn clean package -DskipTests -B
+
+      - name: Verify JAR exists
+        run: |
+          if [ ! -f "target/eMark-PDF-Signer.jar" ]; then
+            echo "ERROR: JAR file not found"
+            exit 1
+          fi
+          echo "JAR file size: $(du -h target/eMark-PDF-Signer.jar | cut -f1)"
+
+      - name: Upload JAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: jar-artifact
+          path: target/eMark-PDF-Signer.jar
+          retention-days: 1
+
+  # ===========================================================================
+  # Windows x64 Build Job
+  # ===========================================================================
+  build-windows-x64:
+    name: Build Windows x64 Installer
+    runs-on: windows-latest
+    needs: [load-config, build-jar]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download JAR artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: jar-artifact
+          path: target
+
+      - name: Download JRE 8 x64 (Windows)
+        run: |
+          # JRE URL loaded from config.yml (build.jre.windows_x64)
+          $JRE_URL = "${{ needs.load-config.outputs.jre_windows_x64 }}"
+          $JRE_ZIP = "jre8-x64.zip"
+          $JRE_DIR = "distributions\windows\jre8-x64"
+
+          Write-Host "Downloading JRE 8 x64 from Adoptium..."
+          Invoke-WebRequest -Uri $JRE_URL -OutFile $JRE_ZIP -UseBasicParsing
+
+          Write-Host "Extracting JRE..."
+          Expand-Archive -Path $JRE_ZIP -DestinationPath "temp_jre" -Force
+
+          $ExtractedDir = Get-ChildItem -Path "temp_jre" -Directory | Select-Object -First 1
+
+          if (Test-Path $JRE_DIR) { Remove-Item -Path $JRE_DIR -Recurse -Force }
+          New-Item -ItemType Directory -Path $JRE_DIR -Force | Out-Null
+          Move-Item -Path "$($ExtractedDir.FullName)\*" -Destination $JRE_DIR -Force
+
+          Remove-Item -Path $JRE_ZIP -Force
+          Remove-Item -Path "temp_jre" -Recurse -Force
+
+          Write-Host "JRE 8 x64 extracted successfully"
+        shell: pwsh
+
+      - name: Verify JRE structure
+        run: |
+          $JAVA_EXE = "distributions\windows\jre8-x64\bin\java.exe"
+          if (!(Test-Path $JAVA_EXE)) {
+            Write-Error "java.exe not found"
+            exit 1
+          }
+          & $JAVA_EXE -version
+        shell: pwsh
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+        shell: pwsh
+
+      - name: Build Windows Installer
+        run: |
+          $ISCC = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          & $ISCC "distributions\windows\emark-x64.iss"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+        shell: pwsh
+
+      - name: Verify installer
+        run: |
+          $INSTALLER = "distributions\windows\Output\emark-x64-setup.exe"
+          if (!(Test-Path $INSTALLER)) { exit 1 }
+          $Size = (Get-Item $INSTALLER).Length / 1MB
+          Write-Host "Installer size: $([math]::Round($Size, 2)) MB"
+        shell: pwsh
+
+      - name: Upload Windows Installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: emark-pdf-signer-windows-x64-installer
+          path: distributions/windows/Output/emark-x64-setup.exe
+          retention-days: 30
+
+  # ===========================================================================
+  # Windows x86 Build Job
+  # ===========================================================================
+  build-windows-x86:
+    name: Build Windows x86 Installer
+    runs-on: windows-latest
+    needs: [load-config, build-jar]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download JAR artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: jar-artifact
+          path: target
+
+      - name: Download JRE 8 x86 (Windows)
+        run: |
+          # JRE URL loaded from config.yml (build.jre.windows_x86)
+          $JRE_URL = "${{ needs.load-config.outputs.jre_windows_x86 }}"
+          $JRE_ZIP = "jre8-x86.zip"
+          $JRE_DIR = "distributions\windows\jre8-x86"
+
+          Write-Host "Downloading JRE 8 x86 from Adoptium..."
+          Invoke-WebRequest -Uri $JRE_URL -OutFile $JRE_ZIP -UseBasicParsing
+
+          Write-Host "Extracting JRE..."
+          Expand-Archive -Path $JRE_ZIP -DestinationPath "temp_jre" -Force
+
+          $ExtractedDir = Get-ChildItem -Path "temp_jre" -Directory | Select-Object -First 1
+
+          if (Test-Path $JRE_DIR) { Remove-Item -Path $JRE_DIR -Recurse -Force }
+          New-Item -ItemType Directory -Path $JRE_DIR -Force | Out-Null
+          Move-Item -Path "$($ExtractedDir.FullName)\*" -Destination $JRE_DIR -Force
+
+          Remove-Item -Path $JRE_ZIP -Force
+          Remove-Item -Path "temp_jre" -Recurse -Force
+
+          Write-Host "JRE 8 x86 extracted successfully"
+        shell: pwsh
+
+      - name: Verify JRE structure
+        run: |
+          $JAVA_EXE = "distributions\windows\jre8-x86\bin\java.exe"
+          if (!(Test-Path $JAVA_EXE)) {
+            Write-Error "java.exe not found"
+            exit 1
+          }
+          & $JAVA_EXE -version
+        shell: pwsh
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+        shell: pwsh
+
+      - name: Build Windows x86 Installer
+        run: |
+          $ISCC = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          & $ISCC "distributions\windows\emark-x86.iss"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+        shell: pwsh
+
+      - name: Verify installer
+        run: |
+          $INSTALLER = "distributions\windows\Output\emark-x86-setup.exe"
+          if (!(Test-Path $INSTALLER)) { exit 1 }
+          $Size = (Get-Item $INSTALLER).Length / 1MB
+          Write-Host "Installer size: $([math]::Round($Size, 2)) MB"
+        shell: pwsh
+
+      - name: Upload Windows x86 Installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: emark-pdf-signer-windows-x86-installer
+          path: distributions/windows/Output/emark-x86-setup.exe
+          retention-days: 30
+
+  # ===========================================================================
+  # Linux x64 Build Job
+  # ===========================================================================
+  build-linux-x64:
+    name: Build Linux x64 Packages
+    runs-on: ubuntu-latest
+    needs: [load-config, build-jar]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download JAR artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: jar-artifact
+          path: target
+
+      - name: Download JRE 8 x64 (Linux)
+        run: |
+          # JRE URL loaded from config.yml (build.jre.linux_x64)
+          JRE_URL="${{ needs.load-config.outputs.jre_linux_x64 }}"
+          JRE_DIR="distributions/linux/jre8-x64"
+
+          echo "Downloading JRE 8 x64 from Adoptium..."
+          curl -L -o jre8-x64.tar.gz "$JRE_URL"
+
+          echo "Extracting JRE..."
+          mkdir -p temp_jre
+          tar -xzf jre8-x64.tar.gz -C temp_jre
+
+          EXTRACTED_DIR=$(ls temp_jre | head -1)
+          rm -rf "$JRE_DIR"
+          mkdir -p "$JRE_DIR"
+          mv temp_jre/$EXTRACTED_DIR/* "$JRE_DIR/"
+
+          rm -rf jre8-x64.tar.gz temp_jre
+          chmod +x "$JRE_DIR/bin/"*
+
+          echo "JRE 8 x64 extracted successfully"
+
+      - name: Verify JRE structure
+        run: |
+          JAVA_EXE="distributions/linux/jre8-x64/bin/java"
+          if [ ! -x "$JAVA_EXE" ]; then
+            echo "ERROR: java not found"
+            exit 1
+          fi
+          $JAVA_EXE -version
+
+      - name: Make build scripts executable
+        run: |
+          chmod +x distributions/linux/*.sh
+
+      - name: Build DEB package
+        run: |
+          cd distributions/linux
+          ./build-deb.sh
+          if [ ! -f "output/emark-x64.deb" ]; then
+            echo "ERROR: DEB package was not created!"
+            exit 1
+          fi
+
+      - name: Build TAR.GZ package
+        run: |
+          cd distributions/linux
+          ./build-tar.sh
+          if [ ! -f "output/emark-x64-linux.tar.gz" ]; then
+            echo "ERROR: TAR.GZ package was not created!"
+            exit 1
+          fi
+
+      - name: Verify packages
+        run: |
+          ls -la distributions/linux/output/
+          if [ ! -f "distributions/linux/output/emark-x64.deb" ]; then
+            echo "ERROR: DEB file not found!"
+            exit 1
+          fi
+          if [ ! -f "distributions/linux/output/emark-x64-linux.tar.gz" ]; then
+            echo "ERROR: TAR.GZ file not found!"
+            exit 1
+          fi
+          echo "DEB size: $(du -h distributions/linux/output/emark-x64.deb | cut -f1)"
+          echo "TAR.GZ size: $(du -h distributions/linux/output/emark-x64-linux.tar.gz | cut -f1)"
+
+      - name: Upload Linux DEB
+        uses: actions/upload-artifact@v4
+        with:
+          name: emark-pdf-signer-linux-x64-deb
+          path: distributions/linux/output/emark-x64.deb
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload Linux TAR.GZ
+        uses: actions/upload-artifact@v4
+        with:
+          name: emark-pdf-signer-linux-x64-tar
+          path: distributions/linux/output/emark-x64-linux.tar.gz
+          if-no-files-found: error
+          retention-days: 30
+
+  # ===========================================================================
+  # Linux x86 Build Job
+  # ===========================================================================
+  build-linux-x86:
+    name: Build Linux x86 Packages
+    runs-on: ubuntu-latest
+    needs: [load-config, build-jar]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download JAR artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: jar-artifact
+          path: target
+
+      - name: Download JRE 8 x86 (Linux)
+        run: |
+          # JRE URL loaded from config.yml (build.jre.linux_x86)
+          # Note: Adoptium does NOT provide x86 Linux JRE, using Azul Zulu instead
+          JRE_URL="${{ needs.load-config.outputs.jre_linux_x86 }}"
+          JRE_DIR="distributions/linux/jre8-x86"
+
+          echo "Downloading JRE 8 x86 from Azul Zulu..."
+          curl -L -o jre8-x86.tar.gz "$JRE_URL"
+
+          # Verify download succeeded (should be > 1MB)
+          FILESIZE=$(stat -c%s jre8-x86.tar.gz 2>/dev/null || stat -f%z jre8-x86.tar.gz 2>/dev/null || echo "0")
+          if [ "$FILESIZE" -lt 1000000 ]; then
+            echo "ERROR: Downloaded file is too small ($FILESIZE bytes). Download may have failed."
+            cat jre8-x86.tar.gz
+            exit 1
+          fi
+          echo "Downloaded file size: $FILESIZE bytes"
+
+          echo "Extracting JRE..."
+          mkdir -p temp_jre
+          tar -xzf jre8-x86.tar.gz -C temp_jre
+
+          EXTRACTED_DIR=$(ls temp_jre | head -1)
+          rm -rf "$JRE_DIR"
+          mkdir -p "$JRE_DIR"
+          mv temp_jre/$EXTRACTED_DIR/* "$JRE_DIR/"
+
+          rm -rf jre8-x86.tar.gz temp_jre
+          chmod +x "$JRE_DIR/bin/"*
+
+          echo "JRE 8 x86 extracted successfully"
+
+      - name: Verify JRE structure
+        run: |
+          JAVA_EXE="distributions/linux/jre8-x86/bin/java"
+          if [ ! -x "$JAVA_EXE" ]; then
+            echo "ERROR: java not found"
+            exit 1
+          fi
+          $JAVA_EXE -version
+
+      - name: Make build scripts executable
+        run: |
+          chmod +x distributions/linux/*.sh
+          chmod +x distributions/linux/emark-x86
+
+      - name: Build DEB package (x86)
+        run: |
+          cd distributions/linux
+          ./build-deb-x86.sh
+          if [ ! -f "output/emark-x86.deb" ]; then
+            echo "ERROR: DEB package was not created!"
+            exit 1
+          fi
+
+      - name: Build TAR.GZ package (x86)
+        run: |
+          cd distributions/linux
+          ./build-tar-x86.sh
+          if [ ! -f "output/emark-x86-linux.tar.gz" ]; then
+            echo "ERROR: TAR.GZ package was not created!"
+            exit 1
+          fi
+
+      - name: Verify packages
+        run: |
+          ls -la distributions/linux/output/
+          if [ ! -f "distributions/linux/output/emark-x86.deb" ]; then
+            echo "ERROR: DEB file not found!"
+            exit 1
+          fi
+          if [ ! -f "distributions/linux/output/emark-x86-linux.tar.gz" ]; then
+            echo "ERROR: TAR.GZ file not found!"
+            exit 1
+          fi
+          echo "DEB size: $(du -h distributions/linux/output/emark-x86.deb | cut -f1)"
+          echo "TAR.GZ size: $(du -h distributions/linux/output/emark-x86-linux.tar.gz | cut -f1)"
+
+      - name: Upload Linux x86 DEB
+        uses: actions/upload-artifact@v4
+        with:
+          name: emark-pdf-signer-linux-x86-deb
+          path: distributions/linux/output/emark-x86.deb
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload Linux x86 TAR.GZ
+        uses: actions/upload-artifact@v4
+        with:
+          name: emark-pdf-signer-linux-x86-tar
+          path: distributions/linux/output/emark-x86-linux.tar.gz
+          if-no-files-found: error
+          retention-days: 30
+
+  # ===========================================================================
+  # macOS Build Job
+  # ===========================================================================
+  build-macos:
+    name: Build macOS x64 Installer
+    runs-on: macos-latest
+    needs: [load-config, build-jar]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download JAR artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: jar-artifact
+          path: target
+
+      - name: Download JRE 8 x64 (macOS)
+        run: |
+          # JRE URL loaded from config.yml (build.jre.macos_x64)
+          JRE_URL="${{ needs.load-config.outputs.jre_macos_x64 }}"
+          JRE_DIR="distributions/macos/jre8-x64"
+
+          echo "Downloading JRE 8 x64 from Adoptium..."
+          curl -L -o jre8-x64.tar.gz "$JRE_URL"
+
+          # Verify download
+          if [ ! -f "jre8-x64.tar.gz" ]; then
+            echo "ERROR: Failed to download JRE"
+            exit 1
+          fi
+
+          FILESIZE=$(stat -f%z jre8-x64.tar.gz 2>/dev/null || stat -c%s jre8-x64.tar.gz 2>/dev/null || echo "0")
+          echo "Downloaded JRE size: $FILESIZE bytes"
+
+          if [ "$FILESIZE" -lt 10000000 ]; then
+            echo "ERROR: Downloaded file is too small ($FILESIZE bytes). Download may have failed."
+            exit 1
+          fi
+
+          echo "Extracting JRE..."
+          mkdir -p temp_jre
+          tar -xzf jre8-x64.tar.gz -C temp_jre
+
+          # The extracted directory should be something like "jdk8u432-b06-jre"
+          EXTRACTED_DIR=$(ls temp_jre | head -1)
+          echo "Extracted directory: $EXTRACTED_DIR"
+
+          if [ -z "$EXTRACTED_DIR" ]; then
+            echo "ERROR: Extraction failed - no directory found"
+            exit 1
+          fi
+
+          # Remove old JRE if exists
+          rm -rf "$JRE_DIR"
+
+          # Move the entire extracted directory (which contains Contents/Home)
+          mv "temp_jre/$EXTRACTED_DIR" "$JRE_DIR"
+
+          # Clean up
+          rm -rf jre8-x64.tar.gz temp_jre
+
+          # Verify the JRE structure
+          if [ ! -d "$JRE_DIR" ]; then
+            echo "ERROR: JRE directory was not created"
+            exit 1
+          fi
+
+          echo "JRE directory structure:"
+          ls -la "$JRE_DIR"
+
+          # Make Java executables executable (macOS structure)
+          if [ -d "$JRE_DIR/Contents/Home/bin" ]; then
+            echo "Found macOS JRE structure, setting permissions..."
+            chmod +x "$JRE_DIR/Contents/Home/bin/"*
+          fi
+
+          # Make Java executables executable (standard structure - fallback)
+          if [ -d "$JRE_DIR/bin" ]; then
+            echo "Found standard JRE structure, setting permissions..."
+            chmod +x "$JRE_DIR/bin/"*
+          fi
+
+          echo "✓ JRE 8 x64 extracted successfully to $JRE_DIR"
+
+      - name: Verify JRE structure
+        run: |
+          JRE_DIR="distributions/macos/jre8-x64"
+
+          echo "=== Verifying JRE Directory ==="
+          if [ ! -d "$JRE_DIR" ]; then
+            echo "ERROR: JRE directory not found at $JRE_DIR"
+            exit 1
+          fi
+
+          echo "JRE directory exists. Contents:"
+          ls -la "$JRE_DIR"
+
+          echo ""
+          echo "=== Looking for Java Executable ==="
+
+          # Try macOS JRE structure first
+          JAVA_MACOS="$JRE_DIR/Contents/Home/bin/java"
+          JAVA_STANDARD="$JRE_DIR/bin/java"
+
+          if [ -x "$JAVA_MACOS" ]; then
+            echo "✓ Found Java executable (macOS structure): $JAVA_MACOS"
+            echo "Testing Java:"
+            "$JAVA_MACOS" -version
+            echo "✓ Java is working correctly"
+          elif [ -x "$JAVA_STANDARD" ]; then
+            echo "✓ Found Java executable (standard structure): $JAVA_STANDARD"
+            echo "Testing Java:"
+            "$JAVA_STANDARD" -version
+            echo "✓ Java is working correctly"
+          else
+            echo "ERROR: Java executable not found or not executable"
+            echo ""
+            echo "Searched for:"
+            echo "  - $JAVA_MACOS"
+            echo "  - $JAVA_STANDARD"
+            echo ""
+            echo "All java files in JRE:"
+            find "$JRE_DIR" -name "java" -type f -ls
+            exit 1
+          fi
+
+          echo ""
+          echo "✓ JRE verification complete"
+
+      - name: Make build scripts executable
+        run: |
+          chmod +x distributions/macos/*.sh
+
+      - name: Build App Bundle
+        run: |
+          cd distributions/macos
+          ./build-app.sh
+
+      - name: Build DMG
+        run: |
+          cd distributions/macos
+          ./build-dmg.sh
+
+      - name: Verify DMG and JRE inclusion
+        run: |
+          echo "=== DMG File ==="
+          ls -la distributions/macos/output/
+          echo "DMG size: $(du -h distributions/macos/output/emark-x64-macos.dmg | cut -f1)"
+
+          echo ""
+          echo "=== Verifying JRE in App Bundles ==="
+
+          # Check Normal app
+          if [ -d "distributions/macos/output/eMark.app/Contents/Resources/jre8-x64" ]; then
+            echo "✓ JRE found in eMark.app"
+
+            # Check for macOS JRE structure
+            if [ -x "distributions/macos/output/eMark.app/Contents/Resources/jre8-x64/Contents/Home/bin/java" ]; then
+              echo "✓ Java executable found (macOS structure)"
+              distributions/macos/output/eMark.app/Contents/Resources/jre8-x64/Contents/Home/bin/java -version
+            elif [ -x "distributions/macos/output/eMark.app/Contents/Resources/jre8-x64/bin/java" ]; then
+              echo "✓ Java executable found (standard structure)"
+              distributions/macos/output/eMark.app/Contents/Resources/jre8-x64/bin/java -version
+            else
+              echo "ERROR: Java executable not found or not executable"
+              exit 1
+            fi
+          else
+            echo "ERROR: JRE directory not found in eMark.app"
+            echo "Contents of Resources directory:"
+            ls -la distributions/macos/output/eMark.app/Contents/Resources/
+            exit 1
+          fi
+
+          echo ""
+          echo "✓ All verifications passed!"
+
+      - name: Upload macOS DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: emark-pdf-signer-macos-x64-dmg
+          path: distributions/macos/output/emark-x64-macos.dmg
+          retention-days: 30
+
+  # ===========================================================================
+  # Release Job
+  # ===========================================================================
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [build-windows-x64, build-windows-x86, build-linux-x64, build-linux-x86, build-macos]
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.create_release == true)
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history and tags for changelog generation
+
+      - name: Download JAR artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: jar-artifact
+          path: release-artifacts
+
+      - name: Download Windows x64 Installer
+        uses: actions/download-artifact@v4
+        with:
+          name: emark-pdf-signer-windows-x64-installer
+          path: release-artifacts
+
+      - name: Download Windows x86 Installer
+        uses: actions/download-artifact@v4
+        with:
+          name: emark-pdf-signer-windows-x86-installer
+          path: release-artifacts
+
+      - name: Download Linux x64 DEB
+        uses: actions/download-artifact@v4
+        with:
+          name: emark-pdf-signer-linux-x64-deb
+          path: release-artifacts
+
+      - name: Download Linux x64 TAR.GZ
+        uses: actions/download-artifact@v4
+        with:
+          name: emark-pdf-signer-linux-x64-tar
+          path: release-artifacts
+
+      - name: Download Linux x86 DEB
+        uses: actions/download-artifact@v4
+        with:
+          name: emark-pdf-signer-linux-x86-deb
+          path: release-artifacts
+
+      - name: Download Linux x86 TAR.GZ
+        uses: actions/download-artifact@v4
+        with:
+          name: emark-pdf-signer-linux-x86-tar
+          path: release-artifacts
+
+      - name: Download macOS DMG
+        uses: actions/download-artifact@v4
+        with:
+          name: emark-pdf-signer-macos-x64-dmg
+          path: release-artifacts
+
+      - name: List artifacts
+        run: |
+          echo "Downloaded artifacts:"
+          ls -la release-artifacts/
+
+      - name: Get version from VERSION file, tag, or input
+        id: get_version
+        run: |
+          # Priority: 1) Git tag, 2) Manual input, 3) VERSION file
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/v}
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.release_version }}" ]]; then
+            VERSION="${{ inputs.release_version }}"
+          else
+            VERSION=$(cat VERSION | tr -d '[:space:]')
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Check for previous tag
+        id: check_previous_tag
+        run: |
+          # Get the count of tags
+          TAG_COUNT=$(git tag -l 'v*' | wc -l)
+          echo "Tag count: $TAG_COUNT"
+
+          if [ "$TAG_COUNT" -le 1 ]; then
+            echo "is_first_release=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_first_release=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate Release Notes
+        id: changelog
+        if: steps.check_previous_tag.outputs.is_first_release == 'false'
+        uses: requarks/changelog-action@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ github.ref_name }}
+          # Exclude certain commit types from changelog (empty = include all)
+          # Options: build, chore, ci, docs, feat, fix, perf, refactor, revert, style, test
+          excludeTypes: 'build,ci,chore'
+          # Include all commits even if they don't follow conventional commit format
+          includeInvalidCommits: true
+          # Reverse chronological order (newest first)
+          reverseOrder: true
+
+      - name: Set default release notes for first release
+        id: default_changelog
+        if: steps.check_previous_tag.outputs.is_first_release == 'true'
+        run: |
+          echo "changes=Initial release of eMark PDF Signer - Advanced PDF Signing Application." >> $GITHUB_OUTPUT
+
+      - name: Extract custom changelog from config.yml
+        id: extract_changelog
+        run: |
+          VERSION="${{ steps.get_version.outputs.version }}"
+
+          # Try to extract version-specific notes from config.yml
+          if [ -f "config.yml" ]; then
+            echo "Found config.yml, extracting release notes for version $VERSION..."
+
+            # Check if release_notes section exists for this version
+            if yq eval ".release_notes.\"$VERSION\"" config.yml | grep -q "null"; then
+              echo "No release notes found for version $VERSION in config.yml"
+              echo "has_custom=false" >> $GITHUB_OUTPUT
+            else
+              echo "[OK] Found release notes for version $VERSION"
+
+              # Build formatted changelog from YAML structure
+              CHANGELOG_CONTENT=""
+
+              # Extract and format "fixed" section
+              FIXED_ITEMS=$(yq eval ".release_notes.\"$VERSION\".fixed[]" config.yml 2>/dev/null)
+              if [ -n "$FIXED_ITEMS" ]; then
+                CHANGELOG_CONTENT+="### Fixed"$'\n'$'\n'
+                while IFS= read -r line; do
+                  CHANGELOG_CONTENT+="- $line"$'\n'
+                done <<< "$FIXED_ITEMS"
+                CHANGELOG_CONTENT+=$'\n'
+              fi
+
+              # Extract and format "changed" section
+              CHANGED_ITEMS=$(yq eval ".release_notes.\"$VERSION\".changed[]" config.yml 2>/dev/null)
+              if [ -n "$CHANGED_ITEMS" ]; then
+                CHANGELOG_CONTENT+="### Changed"$'\n'$'\n'
+                while IFS= read -r line; do
+                  CHANGELOG_CONTENT+="- $line"$'\n'
+                done <<< "$CHANGED_ITEMS"
+                CHANGELOG_CONTENT+=$'\n'
+              fi
+
+              # Extract and format "added" section
+              ADDED_ITEMS=$(yq eval ".release_notes.\"$VERSION\".added[]" config.yml 2>/dev/null)
+              if [ -n "$ADDED_ITEMS" ]; then
+                CHANGELOG_CONTENT+="### Added"$'\n'$'\n'
+                while IFS= read -r line; do
+                  CHANGELOG_CONTENT+="- $line"$'\n'
+                done <<< "$ADDED_ITEMS"
+              fi
+
+              if [ -n "$CHANGELOG_CONTENT" ]; then
+                {
+                  echo "custom_notes<<EOF"
+                  echo "$CHANGELOG_CONTENT"
+                  echo "EOF"
+                } >> $GITHUB_OUTPUT
+                echo "has_custom=true" >> $GITHUB_OUTPUT
+              else
+                echo "Release notes section exists but is empty"
+                echo "has_custom=false" >> $GITHUB_OUTPUT
+              fi
+            fi
+          else
+            echo "config.yml not found, using auto-generated changelog"
+            echo "has_custom=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: eMark PDF Signer v${{ steps.get_version.outputs.version }}
+          draft: false
+          prerelease: ${{ contains(github.ref, '-alpha') || contains(github.ref, '-beta') || contains(github.ref, '-rc') }}
+          files: |
+            release-artifacts/eMark-PDF-Signer.jar
+            release-artifacts/emark-x64-setup.exe
+            release-artifacts/emark-x86-setup.exe
+            release-artifacts/emark-x64.deb
+            release-artifacts/emark-x86.deb
+            release-artifacts/emark-x64-linux.tar.gz
+            release-artifacts/emark-x86-linux.tar.gz
+            release-artifacts/emark-x64-macos.dmg
+          body: |
+            ## eMark PDF Signer v${{ steps.get_version.outputs.version }}
+
+            Advanced PDF Signing Application by TrexoLab.
+
+            ---
+
+            🛸 Other Changes
+
+            ${{ steps.extract_changelog.outputs.has_custom == 'true' && steps.extract_changelog.outputs.custom_notes || '' }}
+
+            ${{ steps.changelog.outputs.changes || steps.default_changelog.outputs.changes || '' }}
+
+            ---
+
+            ## Downloads
+
+            ### Windows
+            | Architecture | File | Description |
+            |--------------|------|-------------|
+            | 64-bit (x64) | `emark-x64-setup.exe` | Windows installer with bundled Java 8 |
+            | 32-bit (x86) | `emark-x86-setup.exe` | Windows installer with bundled Java 8 |
+
+            ### Linux
+            | Architecture | File | Description |
+            |--------------|------|-------------|
+            | 64-bit (x64) | `emark-x64.deb` | Debian/Ubuntu package with bundled Java 8 |
+            | 64-bit (x64) | `emark-x64-linux.tar.gz` | Portable package for any Linux distro |
+            | 32-bit (x86) | `emark-x86.deb` | Debian/Ubuntu package with bundled Java 8 |
+            | 32-bit (x86) | `emark-x86-linux.tar.gz` | Portable package for any Linux distro |
+
+            ### macOS
+            | Architecture | File | Description |
+            |--------------|------|-------------|
+            | 64-bit (x64) | `emark-x64-macos.dmg` | macOS disk image with bundled Java 8 |
+
+            ### Cross-platform
+            | File | Description |
+            |------|-------------|
+            | `eMark-PDF-Signer.jar` | JAR file (requires Java 8 installed) |
+
+            <details>
+            <summary><b>Installation Instructions</b></summary>
+
+            ### Windows
+            1. Download `emark-x64-setup.exe`
+            2. Run the installer
+            3. Launch from Start Menu
+
+            ### Linux (Debian/Ubuntu)
+            ```bash
+            sudo dpkg -i emark-x64.deb
+            ```
+
+            ### Linux (Other distros)
+            ```bash
+            tar -xzf emark-x64-linux.tar.gz -C /opt/
+            /opt/emark/emark
+            ```
+
+            ### macOS
+            1. Download `emark-x64-macos.dmg`
+            2. Open the DMG file
+            3. Drag eMark PDF Signer to Applications
+            4. Right-click and select "Open" on first launch
+
+            </details>
+
+            <details>
+            <summary><b>Memory Profiles</b></summary>
+
+            All installers include shortcuts/options for different memory profiles:
+
+            | Profile | Memory |
+            |---------|--------|
+            | Normal | 2GB |
+            | Large | 4GB |
+            | Extra Large | 8GB |
+
+            </details>
+
+            <details>
+            <summary><b>System Requirements</b></summary>
+
+            - **Windows**: Windows 10 or later (64-bit or 32-bit)
+            - **Linux**: Any modern distribution (64-bit or 32-bit)
+            - **macOS**: macOS 10.13 (High Sierra) or later (64-bit only)
+
+            No separate Java installation required - all packages include bundled JRE 8.
+
+            </details>
+
+            ---
+            *Built with GitHub Actions*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

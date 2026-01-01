@@ -1,0 +1,176 @@
+# ============================================================================
+# eMark PDF Signer - Centralized Repository Configuration
+# Single Source of Truth for all repository and organization settings
+# ============================================================================
+#
+# This file contains all configurable values for:
+# - GitHub repository information
+# - Organization details
+# - Website URLs
+# - Contact information
+# - Build/release settings
+#
+# Update this file to change settings across the entire project.
+# ============================================================================
+
+# =============================================================================
+# GitHub Repository Configuration
+# =============================================================================
+github:
+  owner: "trexolab-dev" # GitHub username/organization
+  repo: "emark-pdf-signer" # Repository name
+
+  # Full repository URL (auto-generated from owner/repo)
+  repo_url: "https://github.com/trexolab-dev/emark-pdf-signer"
+
+  # GitHub Pages URL
+  pages_url: "https://trexolab-dev.github.io/emark-pdf-signer"
+
+  # API base URL (auto-generated)
+  api_url: "https://api.github.com/repos/trexolab-dev/emark-pdf-signer"
+
+# =============================================================================
+# Organization/Author Information
+# =============================================================================
+organization:
+  name: "TrexoLab"
+  email: "contact@trexolab.com"
+  website: "https://trexolab.com"
+  twitter: "@trexolab"
+
+  # Copyright
+  copyright_year_start: "2024"
+  copyright_year_current: "2025"
+  copyright_text: "Copyright © 2024-2025 TrexoLab. All rights reserved."
+
+# =============================================================================
+# Application Information
+# =============================================================================
+application:
+  name: "eMark PDF Signer"
+  full_name: "eMark PDF Signer - Advanced PDF Signing Application"
+  description: "Advanced PDF Signing Application by TrexoLab"
+  version_file: "VERSION" # Path to version file
+
+  # Package/Bundle identifiers
+  maven:
+    group_id: "com.trexolab"
+    artifact_id: "eMark-PDF-Signer"
+
+  macos:
+    bundle_id: "com.trexolab.emark-pdf-signer"
+
+  windows:
+    publisher: "TrexoLab"
+    install_dir: "TrexoLab\\eMark PDF Signer"
+
+# =============================================================================
+# Build Configuration
+# =============================================================================
+build:
+  java:
+    version: "8"
+    distribution: "temurin"
+
+  # JRE URLs (Adoptium Temurin 8u432-b06)
+  # All installers bundle JRE - no separate Java installation required
+  #
+  # IMPORTANT: This is the SINGLE SOURCE OF TRUTH for JRE URLs!
+  # The GitHub Actions workflow (.github/workflows/build-installers.yml) reads from this file.
+  # To update JRE version, only update the URLs below - the workflow will automatically use them.
+  jre:
+    windows_x64: "https://github.com/adoptium/temurin8-binaries/releases/download/jdk8u432-b06/OpenJDK8U-jre_x64_windows_hotspot_8u432b06.zip"
+    windows_x86: "https://github.com/adoptium/temurin8-binaries/releases/download/jdk8u432-b06/OpenJDK8U-jre_x86-32_windows_hotspot_8u432b06.zip"
+    linux_x64: "https://github.com/adoptium/temurin8-binaries/releases/download/jdk8u432-b06/OpenJDK8U-jre_x64_linux_hotspot_8u432b06.tar.gz"
+    linux_x86: "https://cdn.azul.com/zulu/bin/zulu8.82.0.21-ca-jre8.0.432-linux_i686.tar.gz" # Adoptium doesn't provide x86 Linux
+    macos_x64: "https://github.com/adoptium/temurin8-binaries/releases/download/jdk8u432-b06/OpenJDK8U-jre_x64_mac_hotspot_8u432b06.tar.gz"
+
+  # JRE Structure Notes:
+  # - Windows: ZIP contains jdk8u432-b06-jre/ with bin/java.exe
+  # - Linux: TAR.GZ contains jdk8u432-b06-jre/ with bin/java
+  # - macOS: TAR.GZ contains jdk8u432-b06-jre/Contents/Home/bin/java (macOS .app bundle structure)
+
+# =============================================================================
+# Contact & Support URLs
+# =============================================================================
+urls:
+  # Documentation
+  documentation: "https://trexolab-dev.github.io/emark-pdf-signer/#/installation"
+  wiki: "https://github.com/trexolab-dev/emark-pdf-signer/wiki"
+
+  # Community
+  discussions: "https://github.com/trexolab-dev/emark-pdf-signer/discussions"
+  issues: "https://github.com/trexolab-dev/emark-pdf-signer/issues"
+  security: "https://github.com/trexolab-dev/emark-pdf-signer/security/advisories/new"
+
+  # Releases
+  releases: "https://github.com/trexolab-dev/emark-pdf-signer/releases"
+  latest_release: "https://github.com/trexolab-dev/emark-pdf-signer/releases/latest"
+
+  # Downloads (latest artifacts)
+  downloads:
+    windows_x64: "https://github.com/trexolab-dev/emark-pdf-signer/releases/latest/download/emark-pdf-signer-x64-setup.exe"
+    windows_x86: "https://github.com/trexolab-dev/emark-pdf-signer/releases/latest/download/emark-pdf-signer-x86-setup.exe"
+    linux_x64_deb: "https://github.com/trexolab-dev/emark-pdf-signer/releases/latest/download/emark-pdf-signer-x64.deb"
+    linux_x86_deb: "https://github.com/trexolab-dev/emark-pdf-signer/releases/latest/download/emark-pdf-signer-x86.deb"
+    linux_x64_tar: "https://github.com/trexolab-dev/emark-pdf-signer/releases/latest/download/emark-pdf-signer-x64-linux.tar.gz"
+    linux_x86_tar: "https://github.com/trexolab-dev/emark-pdf-signer/releases/latest/download/emark-pdf-signer-x86-linux.tar.gz"
+    macos_dmg: "https://github.com/trexolab-dev/emark-pdf-signer/releases/latest/download/emark-pdf-signer-x64-macos.dmg"
+    jar: "https://github.com/trexolab-dev/emark-pdf-signer/releases/latest/download/eMark-PDF-Signer.jar"
+
+# =============================================================================
+# Installer Configuration
+# =============================================================================
+installer:
+  # Linux DEB package metadata
+  linux:
+    maintainer: "TrexoLab <contact@trexolab.com>"
+    homepage: "https://trexolab-dev.github.io/emark-pdf-signer/"
+    section: "utils"
+    priority: "optional"
+
+  # Windows installer metadata
+  windows:
+    publisher: "TrexoLab"
+    publisher_url: "https://trexolab.com"
+    app_url: "https://trexolab-dev.github.io/emark-pdf-signer/"
+
+# =============================================================================
+# Release Notes Configuration
+# =============================================================================
+# Define release notes for each version here
+# The GitHub Actions workflow will read this and include it in releases
+release_notes:
+  "1.0.0":
+    fixed:
+      - "macOS file selection now fully accessible with Java-based JFileChooser"
+      - "PDF files in Documents, Downloads, Desktop and other protected folders can be opened and signed"
+      - "Emoji characters not displaying properly on macOS so removed all emojis from UI"
+    changed:
+      - "Unified file selection across all platforms using JFileChooser for consistent user experience"
+      - "Removed platform-specific file dialog implementations in favor of single Java-based solution"
+      - "Replaced emojis with cross-platform compatible Unicode characters for better display"
+
+# =============================================================================
+# Social Media & Branding
+# =============================================================================
+social:
+  twitter:
+    site: "@trexolab"
+    creator: "@trexolab"
+
+  # Open Graph / Social sharing images
+  og_image: "https://trexolab-dev.github.io/emark-pdf-signer/assets/og-image.png"
+  logo: "https://trexolab-dev.github.io/emark-pdf-signer/images/logo.png"
+
+# =============================================================================
+# Notes
+# =============================================================================
+# To update the GitHub username/organization across the entire project:
+# 1. Change the 'github.owner' field above
+# 2. Update generated URLs accordingly (or use scripts to auto-generate)
+# 3. Run find-and-replace across the project if needed
+#
+# This config file should be the authoritative source for all settings.
+# Consider creating scripts to read from this file and update other configs.
+# =============================================================================

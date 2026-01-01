@@ -1,0 +1,120 @@
+package com.trexolab.core.keyStoresProvider;
+
+
+import com.trexolab.core.exception.CertificateNotFoundException;
+import com.trexolab.core.exception.KeyStoreInitializationException;
+import com.trexolab.core.exception.PrivateKeyAccessException;
+import com.trexolab.core.model.KeystoreAndCertificateInfo;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
+
+import java.io.IOException;
+import java.security.*;
+import java.security.cert.Certificate;
+import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Enumeration;
+import java.util.List;
+
+import static com.trexolab.utils.AppConstants.WIN_KEY_STORE;
+
+public class WindowsKeyStoreProvider extends X509CertificateValidatorImpl implements KeyStoreProvider {
+
+    private static final Log log = LogFactory.getLog(WindowsKeyStoreProvider.class);
+    private final KeyStore keyStore;
+
+    private final String provider = "SunMSCAPI";
+    private final BouncyCastleProvider cryptoProvider = new BouncyCastleProvider();
+    private String serialHex;
+
+    public WindowsKeyStoreProvider() throws KeyStoreInitializationException {
+        try {
+            Security.addProvider(cryptoProvider);
+            this.keyStore = KeyStore.getInstance("Windows-MY", provider);
+            this.keyStore.load(null, null);
+        } catch (KeyStoreException | NoSuchProviderException e) {
+            throw new KeyStoreInitializationException("Failed to initialize KeyStore: " + e.getMessage(), e);
+        } catch (IOException | NoSuchAlgorithmException | CertificateException e) {
+            throw new KeyStoreInitializationException("Failed to load KeyStore: " + e.getMessage(), e);
+        }
+    }
+
+    public String getProvider() {
+        return provider;
+    }
+
+    public void setSerialHex(String serialHex) {
+        this.serialHex = serialHex;
+    }
+
+    @Override
+    public List<KeystoreAndCertificateInfo> loadCertificates() {
+        List<KeystoreAndCertificateInfo> result = new ArrayList<>();
+
+        try {
+            Enumeration<String> aliases = keyStore.aliases();
+            while (aliases.hasMoreElements()) {
+                String alias = aliases.nextElement();
+
+                if (!keyStore.isKeyEntry(alias)) continue;
+
+                Certificate cert = keyStore.getCertificate(alias);
+                if (!(cert instanceof X509Certificate)) continue;
+
+                X509Certificate x509Cert = (X509Certificate) cert;
+
+                result.add(new KeystoreAndCertificateInfo(x509Cert, WIN_KEY_STORE, null, null));
+            }
+
+        } catch (KeyStoreException e) {
+            log.error("Error accessing Windows keystore: " + e.getMessage(), e);
+        }
+
+        return result;
+    }
+
+
+    private String findAliasByCertSerial(String serialHex) throws CertificateNotFoundException, KeyStoreInitializationException {
+        try {
+            return com.trexolab.utils.KeyStoreAliasHelper.findAliasBySerialHex(keyStore, serialHex);
+        } catch (KeyStoreException e) {
+            throw new KeyStoreInitializationException("Error searching for alias", e);
+        }
+    }
+
+
+    public PrivateKey getPrivateKey() throws KeyStoreInitializationException, CertificateNotFoundException, PrivateKeyAccessException {
+        try {
+            String alias = findAliasByCertSerial(serialHex);
+            return (PrivateKey) keyStore.getKey(alias, null);
+        } catch (UnrecoverableKeyException e) {
+            throw new PrivateKeyAccessException("Invalid PIN or access denied to private key", e);
+        } catch (KeyStoreException | NoSuchAlgorithmException e) {
+            throw new KeyStoreInitializationException("Failed to access private key", e);
+        }
+    }
+
+    public X509Certificate getCertificate() throws KeyStoreInitializationException, CertificateNotFoundException {
+        try {
+            String alias = findAliasByCertSerial(serialHex);
+            Certificate cert = keyStore.getCertificate(alias);
+            if (cert instanceof X509Certificate) {
+                return (X509Certificate) cert;
+            } else {
+                throw new CertificateNotFoundException("Certificate not found or not X509");
+            }
+        } catch (KeyStoreException e) {
+            throw new KeyStoreInitializationException("Failed to fetch certificate: " + e.getMessage(), e);
+        }
+    }
+
+    public X509Certificate[] getCertificateChain() throws KeyStoreException {
+        String alias = findAliasByCertSerial(serialHex);
+        return Arrays.stream(keyStore.getCertificateChain(alias))
+                .map(cert -> (X509Certificate) cert)
+                .toArray(X509Certificate[]::new);
+    }
+}

@@ -1,0 +1,76 @@
+# ============================================================================
+# eMark PDF Signer - Release Notes Configuration
+# TrexoLab - https://cispl-dev.github.io
+# ============================================================================
+#
+# This file configures how GitHub auto-generates release notes.
+# When creating a release, click "Generate release notes" or use
+# `generate_release_notes: true` in the workflow.
+#
+# Commits/PRs are categorized based on:
+#   1. Labels (if using PRs)
+#   2. Conventional commit prefixes (feat:, fix:, docs:, etc.)
+#
+# ============================================================================
+
+changelog:
+  # Exclude these labels from release notes
+  exclude:
+    labels:
+      - ignore-for-release
+      - skip-changelog
+      - duplicate
+      - invalid
+      - wontfix
+
+  # Categorize changes
+  categories:
+    - title: "New Features"
+      labels:
+        - enhancement
+        - feature
+        - feat
+
+    - title: "Bug Fixes"
+      labels:
+        - bug
+        - fix
+        - bugfix
+        - hotfix
+
+    - title: "Security Updates"
+      labels:
+        - security
+
+    - title: "Performance Improvements"
+      labels:
+        - performance
+        - perf
+
+    - title: "Documentation"
+      labels:
+        - documentation
+        - docs
+
+    - title: "Dependencies"
+      labels:
+        - dependencies
+        - deps
+
+    - title: "Build & CI"
+      labels:
+        - build
+        - ci
+        - github-actions
+
+    - title: "Refactoring"
+      labels:
+        - refactor
+        - refactoring
+        - cleanup
+
+    - title: "Other Changes"
+      labels:
+        - chore
+        - maintenance
+        - "*"

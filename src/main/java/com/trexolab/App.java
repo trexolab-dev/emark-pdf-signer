@@ -1,0 +1,135 @@
+package com.trexolab;
+
+import com.trexolab.config.ConfigManager;
+import com.trexolab.gui.DialogUtils;
+import com.trexolab.gui.pdfHandler.PdfViewerMain;
+import com.trexolab.utils.FileUtils;
+import com.formdev.flatlaf.themes.FlatMacDarkLaf;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+
+import javax.swing.*;
+import java.awt.*;
+import java.net.Authenticator;
+import java.net.PasswordAuthentication;
+import java.util.Map;
+
+import static com.trexolab.utils.AppConstants.LOGO_PATH;
+
+public class App {
+
+    private static final Log log = LogFactory.getLog(App.class);
+
+    static {
+        System.setProperty("sun.security.pkcs11.disableNativeDialog", "true");
+        System.setProperty("file.encoding", "UTF-8");
+
+        // macOS-specific properties for native file dialogs
+        if (System.getProperty("os.name").toLowerCase().contains("mac")) {
+            // Enable native macOS file dialogs with proper permissions
+            System.setProperty("apple.awt.fileDialogForDirectories", "true");
+            System.setProperty("apple.awt.use-file-dialog-packages", "true");
+        }
+
+        FlatMacDarkLaf.setup();
+        UIManager.put("defaultFont", new Font("SansSerif", Font.PLAIN, 13));
+    }
+
+    public static Image getAppIcon() {
+        java.net.URL iconUrl = App.class.getResource(LOGO_PATH);
+        if (iconUrl == null) {
+            log.info("App icon not found at::::::::::::: " + LOGO_PATH);
+            return null;
+        }
+        return Toolkit.getDefaultToolkit().getImage(iconUrl);
+    }
+
+    public static void main(String[] args) {
+        AppInitializer.initialize();
+        configureProxyFromConfig();
+
+        SwingUtilities.invokeLater(() -> {
+            if (!isJava8()) {
+                showJavaVersionErrorAndExit();
+                return;
+            }
+
+            setupUiDefaults();
+            launchApp(args);
+        });
+    }
+
+    private static boolean isJava8() {
+        String version = System.getProperty("java.version", "");
+        return version.startsWith("1.8");
+    }
+
+    private static void showJavaVersionErrorAndExit() {
+        String version = System.getProperty("java.version", "unknown");
+
+        String htmlMessage = "<html><body style='"
+                + "font-family:Segoe UI, sans-serif;"
+                + "font-size:13px;"
+                + "width:400px;"
+                + "background-color:#2b2b2b;"
+                + "padding:20px;"
+                + "border-radius:10px;"
+                + "color:#e0e0e0;"
+                + "'>"
+                + "<h2 style='color:#ff6b6b; margin:0 0 12px 0; text-align:center; font-size:17px;'>"
+                + "Unsupported Java Version</h2>"
+                + "<p style='margin-top:5px; line-height:1.9;'>"
+                + "This application requires <b>Java 8</b> (version <b>1.8.x</b>) to run."
+                + "<br />Detected Java version: <span style='color:#ffd54f; font-weight:bold;'>" + version + "</span>."
+                + "<br />Please install <b>Java 8</b> and restart the application."
+                + "</p>"
+                + "</body></html>";
+
+        DialogUtils.showError(null, "Unsupported Java Version", htmlMessage);
+        System.exit(1);
+    }
+
+    private static void setupUiDefaults() {
+        UIManager.put("Button.arc", 10);
+        UIManager.put("Component.arc", 10);
+        UIManager.put("ScrollBar.width", 14);
+        UIManager.put("ScrollBar.thumbArc", 14);
+        UIManager.put("ScrollBar.thumbInsets", new Insets(2, 2, 2, 2));
+    }
+
+    private static void launchApp(String[] args) {
+        PdfViewerMain pdfViewerMain = new PdfViewerMain();
+        pdfViewerMain.setVisible(true);
+
+        if (args.length == 1 && FileUtils.isFileExist(args[0])) {
+            pdfViewerMain.renderPdfFromPath(args[0]);
+        }
+    }
+
+    private static void configureProxyFromConfig() {
+        Map<String, String> proxy = ConfigManager.getProxySettings();
+        String host = proxy.getOrDefault("host", "").trim();
+        String port = proxy.getOrDefault("port", "").trim();
+        String user = proxy.getOrDefault("username", "").trim();
+        String pass = proxy.getOrDefault("password", "").trim();
+
+        if (host.isEmpty() || port.isEmpty())
+            return;
+
+        System.setProperty("http.proxyHost", host);
+        System.setProperty("http.proxyPort", port);
+        System.setProperty("https.proxyHost", host);
+        System.setProperty("https.proxyPort", port);
+
+        log.info("Proxy configured: " + host + ":" + port);
+
+        if (!user.isEmpty()) {
+            Authenticator.setDefault(new Authenticator() {
+                protected PasswordAuthentication getPasswordAuthentication() {
+                    return new PasswordAuthentication(user, pass.toCharArray());
+                }
+            });
+            log.info("Proxy authentication configured.");
+        }
+    }
+}

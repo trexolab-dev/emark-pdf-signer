@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=eMark PDF Signer
+GenericName=PDF Signer
+Comment=Advanced PDF Signing Application by TrexoLab
+Exec=/opt/emark/emark %f
+Icon=/opt/emark/emark.png
+Terminal=false
+Categories=Office;Utility;Java;
+Keywords=pdf;sign;signature;certificate;digital;
+StartupNotify=true
+StartupWMClass=com-trexolab-App

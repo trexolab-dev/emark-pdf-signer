@@ -1,0 +1,29 @@
+/**
+ * Main Stylesheet Entry Point
+ *
+ * This file imports all modular CSS files in the correct order.
+ * Organized for maintainability and separation of concerns.
+ *
+ * Structure:
+ * - theme.css: CSS custom properties and theme variables
+ * - base.css: Reset styles, scrollbar, and foundational styles
+ * - utilities.css: Gradient, glass, glow, button, and card utilities
+ * - animations.css: Keyframe animations and animation utility classes
+ */
+
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Theme variables and custom properties */
+@import "./theme.css";
+
+/* Base styles and resets */
+@import "./base.css";
+
+/* Utility classes */
+@import "./utilities.css";
+
+/* Animation keyframes and classes */
+@import "./animations.css";

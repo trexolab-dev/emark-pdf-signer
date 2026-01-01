@@ -1,0 +1,146 @@
+# Robots.txt for eMark PDF Signer - Free PDF Signing Tool
+# Website: https://trexolab-dev.github.io/emark-pdf-signer/
+# Last Updated: 2025-12-03
+
+# Default rules for all crawlers
+User-agent: *
+Allow: /
+Allow: /images/
+Allow: /assets/
+Allow: /diagrams/
+
+# Disallow build artifacts and source maps
+Disallow: /assets/*.map
+Disallow: /*.map$
+
+# Google Search Bot
+User-agent: Googlebot
+Allow: /
+Crawl-delay: 1
+
+# Google Image Bot - Allow all images
+User-agent: Googlebot-Image
+Allow: /images/
+Allow: /assets/
+Allow: /diagrams/
+
+# Bing Search Bot
+User-agent: Bingbot
+Allow: /
+Crawl-delay: 1
+
+# Bing Preview Bot
+User-agent: BingPreview
+Allow: /
+
+# Yahoo Search Bot
+User-agent: Slurp
+Allow: /
+Crawl-delay: 2
+
+# DuckDuckGo Bot
+User-agent: DuckDuckBot
+Allow: /
+Crawl-delay: 1
+
+# Baidu Search Bot
+User-agent: Baiduspider
+Allow: /
+Crawl-delay: 2
+
+# Yandex Search Bot
+User-agent: YandexBot
+Allow: /
+Crawl-delay: 2
+
+# Yandex Image Bot
+User-agent: YandexImages
+Allow: /images/
+Allow: /assets/
+Allow: /diagrams/
+
+# Sogou Search Bot
+User-agent: Sogou
+Allow: /
+Crawl-delay: 2
+
+# Facebook Crawler
+User-agent: facebookexternalhit
+Allow: /
+
+# Twitter Card Bot
+User-agent: Twitterbot
+Allow: /
+
+# LinkedIn Bot
+User-agent: LinkedInBot
+Allow: /
+
+# Pinterest Bot
+User-agent: Pinterest
+Allow: /
+
+# WhatsApp Preview
+User-agent: WhatsApp
+Allow: /
+
+# Telegram Bot
+User-agent: TelegramBot
+Allow: /
+
+# Slack Bot
+User-agent: Slackbot
+Allow: /
+
+# Discord Bot
+User-agent: Discordbot
+Allow: /
+
+# Apple/Applebot
+User-agent: Applebot
+Allow: /
+
+# Archive.org Bot - Allow for historical preservation
+User-agent: ia_archiver
+Allow: /
+
+# Common Content Discovery Networks
+User-agent: CCBot
+Allow: /
+
+# AhrefsBot - SEO tool
+User-agent: AhrefsBot
+Allow: /
+Crawl-delay: 10
+
+# SEMrush Bot - SEO tool
+User-agent: SemrushBot
+Allow: /
+Crawl-delay: 10
+
+# Moz Bot - SEO tool
+User-agent: rogerbot
+Allow: /
+Crawl-delay: 10
+
+# Block bad bots (scrapers, spam bots)
+User-agent: MJ12bot
+Disallow: /
+
+User-agent: AhrefsBot/7.0
+Crawl-delay: 30
+
+User-agent: dotbot
+Disallow: /
+
+User-agent: PetalBot
+Disallow: /
+
+User-agent: SeznamBot
+Disallow: /
+
+# Sitemap location
+Sitemap: https://trexolab-dev.github.io/emark-pdf-signer/sitemap.xml
+
+# Host directive (for Yandex)
+Host: https://trexolab-dev.github.io/emark-pdf-signer/
