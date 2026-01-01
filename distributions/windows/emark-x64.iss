@@ -60,7 +60,7 @@ DisableProgramGroupPage=yes
 
 ; Installer output settings
 OutputDir=Output
-OutputBaseFilename=emark-pdf-signer-x64-setup
+OutputBaseFilename=emark-x64-setup
 SetupIconFile=logo.ico
 UninstallDisplayIcon={app}\logo.ico
 

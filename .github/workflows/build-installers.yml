@@ -684,25 +684,30 @@ jobs:
           echo ""
           echo "=== Verifying JRE in App Bundles ==="
 
-          # Check Normal app
-          if [ -d "distributions/macos/output/eMark.app/Contents/Resources/jre8-x64" ]; then
-            echo "✓ JRE found in eMark.app"
+          # Check Normal app (note: app name has space)
+          APP_PATH="distributions/macos/output/eMark PDF Signer.app"
+          if [ -d "$APP_PATH/Contents/Resources/jre8-x64" ]; then
+            echo "✓ JRE found in eMark PDF Signer.app"
 
             # Check for macOS JRE structure
-            if [ -x "distributions/macos/output/eMark.app/Contents/Resources/jre8-x64/Contents/Home/bin/java" ]; then
+            if [ -x "$APP_PATH/Contents/Resources/jre8-x64/Contents/Home/bin/java" ]; then
               echo "✓ Java executable found (macOS structure)"
-              distributions/macos/output/eMark.app/Contents/Resources/jre8-x64/Contents/Home/bin/java -version
-            elif [ -x "distributions/macos/output/eMark.app/Contents/Resources/jre8-x64/bin/java" ]; then
+              "$APP_PATH/Contents/Resources/jre8-x64/Contents/Home/bin/java" -version
+            elif [ -x "$APP_PATH/Contents/Resources/jre8-x64/bin/java" ]; then
               echo "✓ Java executable found (standard structure)"
-              distributions/macos/output/eMark.app/Contents/Resources/jre8-x64/bin/java -version
+              "$APP_PATH/Contents/Resources/jre8-x64/bin/java" -version
             else
               echo "ERROR: Java executable not found or not executable"
               exit 1
             fi
           else
-            echo "ERROR: JRE directory not found in eMark.app"
-            echo "Contents of Resources directory:"
-            ls -la distributions/macos/output/eMark.app/Contents/Resources/
+            echo "ERROR: JRE directory not found in eMark PDF Signer.app"
+            echo "Contents of output directory:"
+            ls -la distributions/macos/output/
+            if [ -d "$APP_PATH" ]; then
+              echo "Contents of Resources directory:"
+              ls -la "$APP_PATH/Contents/Resources/"
+            fi
             exit 1
           fi
 
