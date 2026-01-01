@@ -25,7 +25,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 # Configuration
-DMG_NAME="emark-pdf-signer-x64-macos"
+DMG_NAME="emark-x64-macos"
 VOLUME_NAME="eMark PDF Signer"
 # Read version from VERSION file
 APP_VERSION=$(cat "$ROOT_DIR/VERSION" 2>/dev/null | tr -d '[:space:]' || echo "1.0.0")
