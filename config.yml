@@ -142,14 +142,18 @@ installer:
 # The GitHub Actions workflow will read this and include it in releases
 release_notes:
   "1.0.0":
-    fixed:
-      - "macOS file selection now fully accessible with Java-based JFileChooser"
-      - "PDF files in Documents, Downloads, Desktop and other protected folders can be opened and signed"
-      - "Emoji characters not displaying properly on macOS so removed all emojis from UI"
-    changed:
-      - "Unified file selection across all platforms using JFileChooser for consistent user experience"
-      - "Removed platform-specific file dialog implementations in favor of single Java-based solution"
-      - "Replaced emojis with cross-platform compatible Unicode characters for better display"
+    added:
+      - "PDF digital signature with X.509 certificates"
+      - "PKCS#11 hardware token support (SafeNet, Gemalto, ProxKey, mToken, Watchdata, Feitian)"
+      - "PKCS#12/PFX software certificate support"
+      - "Windows Certificate Store integration"
+      - "RFC 3161 compliant trusted timestamps"
+      - "Visual signature placement with drag-and-drop positioning"
+      - "Invisible signature support"
+      - "Signature verification and validation"
+      - "Cross-platform installers with bundled JRE (Windows, Linux, macOS)"
+      - "Modern UI with FlatLaf theme"
+      - "Customizable signature appearance (text, images, logos)"
 
 # =============================================================================
 # Social Media & Branding
