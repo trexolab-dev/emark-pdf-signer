@@ -360,13 +360,13 @@ EOF
 # Create the archive
 echo "Creating tar.gz archive..."
 cd "$BUILD_DIR"
-tar -czf "$OUTPUT_DIR/${APP_NAME}-x64-linux.tar.gz" "${APP_NAME}-${APP_VERSION}"
+tar -czf "$OUTPUT_DIR/emark-x64-linux.tar.gz" "${APP_NAME}-${APP_VERSION}"
 
 # Show result
 echo ""
 echo "============================================================================"
 echo " Package built successfully!"
 echo "============================================================================"
-echo " Output: $OUTPUT_DIR/${APP_NAME}-x64-linux.tar.gz"
-echo " Size: $(du -h "$OUTPUT_DIR/${APP_NAME}-x64-linux.tar.gz" | cut -f1)"
+echo " Output: $OUTPUT_DIR/emark-x64-linux.tar.gz"
+echo " Size: $(du -h "$OUTPUT_DIR/emark-x64-linux.tar.gz" | cut -f1)"
 echo "============================================================================"
