@@ -154,6 +154,11 @@ release_notes:
       - "Cross-platform installers with bundled JRE (Windows, Linux, macOS)"
       - "Modern UI with FlatLaf theme"
       - "Customizable signature appearance (text, images, logos)"
+  1.0.1:
+    fixed:
+      - Fixed an issue on Linux where the application launcher was not created
+
+
 
 # =============================================================================
 # Social Media & Branding
